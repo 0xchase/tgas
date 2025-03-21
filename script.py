@@ -2,16 +2,17 @@
 
 import os
 import sys
+import argparse
 import subprocess
-import ipaddress  # not strictly used unless you want local IPv6 compression
+import ipaddress
 import numpy as np
 import bz2
 
 ############################################################
-# PARENT CLASS: TargetGenerationAlgorithm
+# PARENT CLASS: TGA
 ############################################################
 
-class TargetGenerationAlgorithm:
+class TGA:
     """
     Base class representing a target generation algorithm.
     """
@@ -94,19 +95,25 @@ class TargetGenerationAlgorithm:
         """
         Placeholder method to train using a list of IPv6 addresses.
         """
+
+        print("Training the model...")
+
         pass
 
-    def generate(self) -> list[str]:
+    def generate(self, count: int) -> list[str]:
         """
         Placeholder method to generate new IPv6 addresses.
         """
+
+        print("Generating addresses...")
+
         return []
 
 ############################################################
 # ENTROPYIP IMPLEMENTATION
 ############################################################
 
-class EntropyIp(TargetGenerationAlgorithm):
+class EntropyIp(TGA):
     def __init__(self, github_url: str, clone_directory: str = "repos"):
         super().__init__(github_url, clone_directory)
         self.env_python = None
@@ -210,7 +217,7 @@ class EntropyIp(TargetGenerationAlgorithm):
 
         print(f"Entropy/IP analysis complete. Results stored in: {full_output}")
 
-    def generate(self) -> list[str]:
+    def generate(self, count: int) -> list[str]:
         """
         In the pure delegate approach, you might rely on the cloned repo's code
         for generating addresses. This stub can remain empty or call another script.
@@ -222,7 +229,7 @@ class EntropyIp(TargetGenerationAlgorithm):
 # SIXFOREST IMPLEMENTATION
 ############################################################
 
-class SixForestTGA(TargetGenerationAlgorithm):
+class SixForestTGA(TGA):
     """
     A single-file approach to 6Forest TGA:
      1) Clone a repo into a subdirectory with its own venv.
@@ -280,7 +287,7 @@ class SixForestTGA(TargetGenerationAlgorithm):
 
         print("Training complete (logic handled in the cloned repo).")
 
-    def generate(self) -> list[str]:
+    def generate(self, count: int) -> list[str]:
         """
         In the pure delegate approach, you might rely on the cloned repo's code
         for generating addresses. This stub can remain empty or call another script.
@@ -307,6 +314,46 @@ def parse_bz2_ipv6_file(filepath: str) -> list[str]:
     
     return addresses
 
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Script for testing various TGAs with initialize, train, and generate actions."
+    )
+
+    subparsers = parser.add_subparsers(dest="action", required=True, help="Action to perform")
+
+    # Subparser for 'initialize'
+    parser_init = subparsers.add_parser("initialize", help="Initialize a specific TGA.")
+    parser_init.add_argument(
+        "--tga",
+        default=None,
+        help="Name of the TGA class to initialize (e.g., 'EntropyIPTGA')."
+    )
+
+    # Subparser for 'train'
+    parser_train = subparsers.add_parser("train", help="Train a specific TGA with some input data.")
+    parser_train.add_argument(
+        "--tga",
+        default=None,
+        help="Name of the TGA class to train (e.g., 'EntropyIPTGA')."
+    )
+    # You might add other arguments here, e.g. input file, seeds, etc.
+
+    # Subparser for 'generate'
+    parser_generate = subparsers.add_parser("generate", help="Generate addresses using a specific TGA.")
+    parser_generate.add_argument(
+        "--tga",
+        default=None,
+        help="Name of the TGA class to use for generation (e.g., 'EntropyIPTGA')."
+    )
+    parser_generate.add_argument(
+        "--output",
+        default=None,
+        help="File path to write generated IPs. If omitted, prints to stdout."
+    )
+
+    args = parser.parse_args()
+    return args
+
 # Example IPv6 addresses for training
 addresses = [
     "2001:0db8:85a3:0000:0000:8a2e:0370:7334",
@@ -314,59 +361,91 @@ addresses = [
     "2001:0db8:85a3:0000:0000:8a2e:0370:7336",
 ]
 
-############################################################
-# Example usage if this script is run directly
-############################################################
+# List of target generation algorithms to use
+TGAS = {
+    "EntropyIP": EntropyIp("https://github.com/akamai/entropy-ip.git"),
+    "6Tree": TGA("https://github.com/sixiangdeweicao/6Tree.git"),
+    "DET": TGA("https://github.com/sixiangdeweicao/DET"),
+    "6GCVAE": TGA("https://github.com/CuiTianyu961030/6GCVAE.git"),
+    "6VecLM": TGA("https://github.com/CuiTianyu961030/6VecLM.git"),
+    "6GAN": TGA("https://github.com/CuiTianyu961030/6GAN.git"),
+    "6Graph": TGA("https://github.com/Lab-ANT/6Graph.git"),
+    "6Forest": SixForestTGA("https://github.com/Lab-ANT/6Forest.git"),
+    "6Scan": TGA("https://github.com/hbn1987/6Scan.git"),
+}
+
+def build_parser(tgas):
+    parser = argparse.ArgumentParser(
+        description="Script for testing various TGAs with initialize, train, and generate actions."
+    )
+
+    subparsers = parser.add_subparsers(dest="action", required=True, help="Action to perform")
+
+    # -- Action: initialize
+    init_parser = subparsers.add_parser("initialize", help="Initialize a TGA.")
+    init_sub = init_parser.add_subparsers(dest="tga_name", required=True, help="Which TGA to initialize?")
+    for tga_name, tga_cls in tgas.items():
+        sp = init_sub.add_parser(tga_name, help=f"Initialize {tga_name}")
+        # tga_cls.register_initialize_args(sp)
+        # Optionally we can add general arguments, e.g. sp.add_argument(...)
+    
+    # -- Action: train
+    train_parser = subparsers.add_parser("train", help="Train a TGA.")
+    train_sub = train_parser.add_subparsers(dest="tga_name", required=True, help="Which TGA to train?")
+    for tga_name, tga_cls in tgas.items():
+        sp = train_sub.add_parser(tga_name, help=f"Train {tga_name}")
+        # tga_cls.register_train_args(sp)
+        # Optionally add other shared arguments
+    
+    # -- Action: generate
+    gen_parser = subparsers.add_parser("generate", help="Generate addresses using a TGA.")
+    gen_sub = gen_parser.add_subparsers(dest="tga_name", required=True, help="Which TGA to generate with?")
+    for tga_name, tga_cls in tgas.items():
+        sp = gen_sub.add_parser(tga_name, help=f"Generate with {tga_name}")
+        # We can add a shared --output param here:
+        sp.add_argument("--output", help="File path to write generated addresses.")
+        # Then call the TGA's own generate-arg registration
+        # tga_cls.register_generate_args(sp)
+
+    return parser
+
+def main():
+    parser = build_parser(TGAS)
+    args = parser.parse_args()
+
+    # figure out which TGA we're using
+    if args.action in ("initialize", "train", "generate"):
+        # e.g. for "initialize" subcommands, we have "args.tga_name"
+        tga_name = getattr(args, "tga_name", None)
+        tga = TGAS.get(tga_name)
+        if not tga:
+            print(f"Unknown TGA: {tga_name}", file=sys.stderr)
+            sys.exit(1)
+        
+        # dispatch
+        if args.action == "initialize":
+            tga.initialize()
+            # tga.initialize(args)
+        elif args.action == "train":
+            tga.train()
+            # tga.train(args)
+        elif args.action == "generate":
+            results = tga.generate()
+            # results = tga.generate(args)
+            # handle --output if user provided it
+            output_path = getattr(args, "output", None)
+            if output_path:
+                with open(output_path, "w") as f:
+                    for line in results:
+                        f.write(line + "\n")
+                print(f"[DEBUG] Wrote {len(results)} addresses to {output_path}")
+            else:
+                # print to stdout
+                for line in results:
+                    print(line)
+    else:
+        parser.print_help()
+
+
 if __name__ == "__main__":
-    # List of target generation algorithms to use
-    tgas = [
-        # Entropy IP (2016)
-        # EntropyIp("https://github.com/akamai/entropy-ip.git"),
-        # 6Tree (2019)
-        TargetGenerationAlgorithm("https://github.com/sixiangdeweicao/6Tree.git"),
-        # DET (2020)
-        TargetGenerationAlgorithm("https://github.com/sixiangdeweicao/DET"),
-        # 6GCVAE (2020)
-        TargetGenerationAlgorithm("https://github.com/CuiTianyu961030/6GCVAE.git"),
-        # 6VecLM (2021)
-        TargetGenerationAlgorithm("https://github.com/CuiTianyu961030/6VecLM.git"),
-        # 6GAN (2021)
-        TargetGenerationAlgorithm("https://github.com/CuiTianyu961030/6GAN.git"),
-        # 6Graph (2022)
-        TargetGenerationAlgorithm("https://github.com/Lab-ANT/6Graph.git"),
-        # 6Forest (2022)
-        SixForestTGA("https://github.com/Lab-ANT/6Forest.git"),
-        # 6Scan (2023)
-        TargetGenerationAlgorithm("https://github.com/hbn1987/6Scan.git"),
-
-    ]
-
-    # Clone each TGA repository
-    for tga in tgas:
-        tga.clone()
-        tga.initialize()
-
-    if len(sys.argv) > 1:
-        input_file = sys.argv[1]
-
-        if not os.path.exists(input_file):
-            print(f"File {input_file} does not exist.")
-            sys.exit(1)
-
-        if not "bz2" in input_file:
-            print(f"File {input_file} is not a .bz2 file.")
-            sys.exit(1)
-
-        print(f"Reading IPv6 addresses from file: {input_file}")
-        addresses = parse_bz2_ipv6_file(input_file)
-
-        for address in addresses[:16]:
-            print(f"Parsed address: {address}")
-        print("...")
-
-    for tga in tgas:
-        tga.train(addresses)
-
-        # 4) Attempt a no-op generate
-        # results = tga.generate()
-        # print("Generated addresses (via local repo's scripts, if any):", results)
+    main()
