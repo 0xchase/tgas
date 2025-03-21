@@ -354,26 +354,6 @@ def parse_args():
     args = parser.parse_args()
     return args
 
-# Example IPv6 addresses for training
-addresses = [
-    "2001:0db8:85a3:0000:0000:8a2e:0370:7334",
-    "2001:0db8:85a3:0000:0000:8a2e:0370:7335",
-    "2001:0db8:85a3:0000:0000:8a2e:0370:7336",
-]
-
-# List of target generation algorithms to use
-TGAS = {
-    "EntropyIP": EntropyIp("https://github.com/akamai/entropy-ip.git"),
-    "6Tree": TGA("https://github.com/sixiangdeweicao/6Tree.git"),
-    "DET": TGA("https://github.com/sixiangdeweicao/DET"),
-    "6GCVAE": TGA("https://github.com/CuiTianyu961030/6GCVAE.git"),
-    "6VecLM": TGA("https://github.com/CuiTianyu961030/6VecLM.git"),
-    "6GAN": TGA("https://github.com/CuiTianyu961030/6GAN.git"),
-    "6Graph": TGA("https://github.com/Lab-ANT/6Graph.git"),
-    "6Forest": SixForestTGA("https://github.com/Lab-ANT/6Forest.git"),
-    "6Scan": TGA("https://github.com/hbn1987/6Scan.git"),
-}
-
 def build_parser(tgas):
     parser = argparse.ArgumentParser(
         description="Script for testing various TGAs with initialize, train, and generate actions."
@@ -408,6 +388,26 @@ def build_parser(tgas):
         # tga_cls.register_generate_args(sp)
 
     return parser
+
+# Example IPv6 addresses for training
+addresses = [
+    "2001:0db8:85a3:0000:0000:8a2e:0370:7334",
+    "2001:0db8:85a3:0000:0000:8a2e:0370:7335",
+    "2001:0db8:85a3:0000:0000:8a2e:0370:7336",
+]
+
+# List of target generation algorithms to use
+TGAS = {
+    "EntropyIP": EntropyIp("https://github.com/akamai/entropy-ip.git"),
+    "6Tree": TGA("https://github.com/sixiangdeweicao/6Tree.git"),
+    "DET": TGA("https://github.com/sixiangdeweicao/DET"),
+    "6GCVAE": TGA("https://github.com/CuiTianyu961030/6GCVAE.git"),
+    "6VecLM": TGA("https://github.com/CuiTianyu961030/6VecLM.git"),
+    "6GAN": TGA("https://github.com/CuiTianyu961030/6GAN.git"),
+    "6Graph": TGA("https://github.com/Lab-ANT/6Graph.git"),
+    "6Forest": SixForestTGA("https://github.com/Lab-ANT/6Forest.git"),
+    "6Scan": TGA("https://github.com/hbn1987/6Scan.git"),
+}
 
 def main():
     parser = build_parser(TGAS)
@@ -445,7 +445,6 @@ def main():
                     print(line)
     else:
         parser.print_help()
-
 
 if __name__ == "__main__":
     main()
