@@ -14,15 +14,15 @@ addresses = [
 
 # List of target generation algorithms to use
 TGAS = {
-    "EntropyIP": EntropyIp("https://github.com/akamai/entropy-ip.git"),
-    "6Tree": TGA("https://github.com/sixiangdeweicao/6Tree.git"),
-    "DET": TGA("https://github.com/sixiangdeweicao/DET"),
-    "6GCVAE": TGA("https://github.com/CuiTianyu961030/6GCVAE.git"),
-    "6VecLM": TGA("https://github.com/CuiTianyu961030/6VecLM.git"),
-    "6GAN": TGA("https://github.com/CuiTianyu961030/6GAN.git"),
-    "6Graph": TGA("https://github.com/Lab-ANT/6Graph.git"),
-    "6Forest": SixForestTGA("https://github.com/Lab-ANT/6Forest.git"),
-    "6Scan": TGA("https://github.com/hbn1987/6Scan.git"),
+    "Entropy":  EntropyIp("https://github.com/akamai/entropy-ip.git"),
+    "6Tree":    TGA("https://github.com/sixiangdeweicao/6Tree.git"),
+    "DET":      TGA("https://github.com/sixiangdeweicao/DET"),
+    "6GCVAE":   TGA("https://github.com/CuiTianyu961030/6GCVAE.git"),
+    "6VecLM":   TGA("https://github.com/CuiTianyu961030/6VecLM.git"),
+    "6GAN":     SixGANTGA("https://github.com/CuiTianyu961030/6GAN.git"),
+    "6Graph":   TGA("https://github.com/Lab-ANT/6Graph.git"),
+    "6Forest":  SixForestTGA("https://github.com/Lab-ANT/6Forest.git"),
+    "6Scan":    TGA("https://github.com/hbn1987/6Scan.git"),
 }
 
 def main():
@@ -30,8 +30,8 @@ def main():
     args = parser.parse_args()
 
     # figure out which TGA we're using
-    if args.action in ("initialize", "train", "generate"):
-        # e.g. for "initialize" subcommands, we have "args.tga_name"
+    if args.action in ("train", "generate", "clean"):
+        # e.g. for "train" subcommands, we have "args.tga_name"
         tga_name = getattr(args, "tga_name", None)
         tga = TGAS.get(tga_name)
         if not tga:
@@ -39,26 +39,29 @@ def main():
             sys.exit(1)
         
         # dispatch
-        if args.action == "initialize":
+        if args.action == "clean":
+            tga.clean()
+        else:
+            # Initialize before training or generating
             tga.initialize()
-            # tga.initialize(args)
-        elif args.action == "train":
-            tga.train()
-            # tga.train(args)
-        elif args.action == "generate":
-            results = tga.generate()
-            # results = tga.generate(args)
-            # handle --output if user provided it
-            output_path = getattr(args, "output", None)
-            if output_path:
-                with open(output_path, "w") as f:
+            if args.action == "train":
+                # Read IPv6 addresses from the input file
+                with open(args.input_file, "r") as f:
+                    addresses = [line.strip() for line in f if line.strip()]
+                tga.train(addresses)
+            elif args.action == "generate":
+                results = tga.generate(args.count)
+                # handle --output if user provided it
+                output_path = getattr(args, "output", None)
+                if output_path:
+                    with open(output_path, "w") as f:
+                        for line in results:
+                            f.write(line + "\n")
+                    print(f"[DEBUG] Wrote {len(results)} addresses to {output_path}")
+                else:
+                    # print to stdout
                     for line in results:
-                        f.write(line + "\n")
-                print(f"[DEBUG] Wrote {len(results)} addresses to {output_path}")
-            else:
-                # print to stdout
-                for line in results:
-                    print(line)
+                        print(line)
     else:
         parser.print_help()
 

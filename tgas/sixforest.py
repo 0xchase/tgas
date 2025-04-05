@@ -1,5 +1,6 @@
 import os
 import subprocess
+import random
 
 from .base import TGA
 
@@ -13,9 +14,11 @@ class SixForestTGA(TGA):
     """
     def __init__(self, github_url: str, clone_directory: str = "repos"):
         super().__init__(github_url, clone_directory)
-        self.env_python = None
 
     def initialize(self) -> None:
+        # First clone the repository
+        self.clone()
+        # Then initialize Python environment
         self._initialize_python("3.9.6", ["numpy==1.21.2", "IPy==1.1"])
 
     def train(self, ipv6_addresses: list[str]) -> None:
@@ -51,11 +54,13 @@ class SixForestTGA(TGA):
         # (Optional) Step 3: main.py for 6Forest logic
         main_script = os.path.join(repo_path, "main.py")
         if os.path.exists(main_script):
-            print(f"Running {main_script} to perform 6Forest analysis...")
-            subprocess.run([
-                self.env_python,
-                main_script
-            ], cwd=repo_path, check=True)
+            output_file = os.path.join(repo_path, "main_output.txt")
+            print(f"Running {main_script} to perform 6Forest analysis and redirecting output to {output_file}...")
+            with open(output_file, "w") as f:
+                subprocess.run([
+                    self.env_python,
+                    main_script
+                ], cwd=repo_path, check=True, stdout=f, stderr=subprocess.STDOUT)
         else:
             print("No main.py found; skipping local 6Forest analysis script.")
 
@@ -63,8 +68,39 @@ class SixForestTGA(TGA):
 
     def generate(self, count: int) -> list[str]:
         """
-        In the pure delegate approach, you might rely on the cloned repo's code
-        for generating addresses. This stub can remain empty or call another script.
+        Parses the output file from the training process to obtain the first address directly below the "Region" divider,
+        and generates the desired number of full IP addresses by replacing '*' with random values.
+        The generated addresses are formatted with colons in the appropriate places.
         """
-        print("No direct generation logic here; relying on cloned repo's code for address generation.")
-        return []
+        print("Generating addresses from the output file...")
+
+        repo_path = os.path.abspath(os.path.join(self.clone_directory, self.repo_name))
+        output_file = os.path.join(repo_path, "main_output.txt")
+
+        if not os.path.exists(output_file):
+            print(f"Output file {output_file} does not exist. Cannot generate addresses.")
+            return []
+
+        partial_addresses = []
+
+        with open(output_file, "r") as f:
+            lines = [line.strip() for line in f if line.strip()]
+
+        # Extract the first address directly below each "Region" divider
+        for i, line in enumerate(lines):
+            if "********Region**********" in line:
+                if i + 1 < len(lines) and '*' in lines[i + 1]:
+                    partial_addresses.append(lines[i + 1])
+
+        # Generate full IP addresses
+        full_addresses = []
+        while len(full_addresses) < count:
+            for partial in partial_addresses:
+                if len(full_addresses) >= count:
+                    break
+                full_address = ''.join(random.choice('0123456789abcdef') if c == '*' else c for c in partial)
+                # Format the address with colons
+                formatted_address = ':'.join(full_address[i:i+4] for i in range(0, len(full_address), 4))
+                full_addresses.append(formatted_address)
+
+        return full_addresses[:count]

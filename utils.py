@@ -63,24 +63,17 @@ def parse_args():
 
 def build_parser(tgas):
     parser = argparse.ArgumentParser(
-        description="Script for testing various TGAs with initialize, train, and generate actions."
+        description="Script for testing various TGAs with train, generate, and clean actions."
     )
 
     subparsers = parser.add_subparsers(dest="action", required=True, help="Action to perform")
 
-    # -- Action: initialize
-    init_parser = subparsers.add_parser("initialize", help="Initialize a TGA.")
-    init_sub = init_parser.add_subparsers(dest="tga_name", required=True, help="Which TGA to initialize?")
-    for tga_name, tga_cls in tgas.items():
-        sp = init_sub.add_parser(tga_name, help=f"Initialize {tga_name}")
-        # tga_cls.register_initialize_args(sp)
-        # Optionally we can add general arguments, e.g. sp.add_argument(...)
-    
     # -- Action: train
     train_parser = subparsers.add_parser("train", help="Train a TGA.")
     train_sub = train_parser.add_subparsers(dest="tga_name", required=True, help="Which TGA to train?")
     for tga_name, tga_cls in tgas.items():
         sp = train_sub.add_parser(tga_name, help=f"Train {tga_name}")
+        sp.add_argument("--input-file", required=True, help="Path to a file containing IPv6 addresses, one per line.")
         # tga_cls.register_train_args(sp)
         # Optionally add other shared arguments
     
@@ -89,9 +82,15 @@ def build_parser(tgas):
     gen_sub = gen_parser.add_subparsers(dest="tga_name", required=True, help="Which TGA to generate with?")
     for tga_name, tga_cls in tgas.items():
         sp = gen_sub.add_parser(tga_name, help=f"Generate with {tga_name}")
-        # We can add a shared --output param here:
-        sp.add_argument("--output", help="File path to write generated addresses.")
+        sp.add_argument("--count", type=int, required=True, help="Number of addresses to generate.")
+        sp.add_argument("--output", help="File path to write generated addresses. If omitted, prints to stdout.")
         # Then call the TGA's own generate-arg registration
         # tga_cls.register_generate_args(sp)
+
+    # -- Action: clean
+    clean_parser = subparsers.add_parser("clean", help="Clean a TGA.")
+    clean_sub = clean_parser.add_subparsers(dest="tga_name", required=True, help="Which TGA to clean?")
+    for tga_name, tga_cls in tgas.items():
+        sp = clean_sub.add_parser(tga_name, help=f"Clean {tga_name}")
 
     return parser

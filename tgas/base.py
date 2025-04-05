@@ -29,29 +29,27 @@ class TGA:
         repo_path = os.path.abspath(os.path.join(self.clone_directory, self.repo_name))
         env_path = os.path.join(repo_path, "venv")
 
-        # Distinguish Python 2 vs. 3
-        # We call `python_executable --version` to see major version
-        version_check = subprocess.run([python_executable, "--version"], capture_output=True, text=True)
-        # Typically returns "Python 3.9.13" or "Python 2.7.18"
-        ver_str = version_check.stdout or version_check.stderr
-        # Or parse using sys.version_info in a separate command
+        # Check if the virtual environment already exists
+        if os.path.exists(env_path):
+            print(f"Virtual environment already exists at {env_path}.")
+        else:
+            # Distinguish Python 2 vs. 3
+            # We call `python_executable --version` to see major version
+            version_check = subprocess.run([python_executable, "--version"], capture_output=True, text=True)
+            # Typically returns "Python 3.9.13" or "Python 2.7.18"
+            ver_str = version_check.stdout or version_check.stderr
+            # Or parse using sys.version_info in a separate command
 
-        if "Python 2." in ver_str:
-            # Use virtualenv
-            # 1) Ensure 'virtualenv' is installed in that python
-            subprocess.run([python_executable, "-m", "pip", "install", "--upgrade", "pip", "virtualenv"], check=True)
-            if not os.path.exists(env_path):
+            if "Python 2." in ver_str:
+                # Use virtualenv
+                # 1) Ensure 'virtualenv' is installed in that python
+                subprocess.run([python_executable, "-m", "pip", "install", "--upgrade", "pip", "virtualenv"], check=True)
                 print(f"Creating Python2.7 virtual environment at {env_path} with virtualenv...")
                 subprocess.run([python_executable, "-m", "virtualenv", env_path], check=True)
             else:
-                print(f"Virtual environment already exists at {env_path}.")
-        else:
-            # Use built-in venv
-            if not os.path.exists(env_path):
+                # Use built-in venv
                 print(f"Creating virtual environment at {env_path} with {python_executable} -m venv ...")
                 subprocess.run([python_executable, "-m", "venv", env_path], check=True)
-            else:
-                print(f"Virtual environment already exists at {env_path}.")
 
         # Path to the newly created environment's python
         self.env_python = os.path.join(env_path, "bin", "python")
@@ -97,3 +95,14 @@ class TGA:
         print("Generating addresses...")
 
         return []
+
+    def clean(self) -> None:
+        """
+        Deletes the cloned repository if it exists.
+        """
+        clone_path = os.path.join(self.clone_directory, self.repo_name)
+        if os.path.exists(clone_path):
+            print(f"Deleting repository {self.repo_name} at {clone_path}...")
+            subprocess.run(["rm", "-rf", clone_path], check=True)
+        else:
+            print(f"Repository {self.repo_name} does not exist at {clone_path}. Nothing to clean.")
