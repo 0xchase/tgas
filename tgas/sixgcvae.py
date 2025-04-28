@@ -3,17 +3,11 @@ import subprocess
 import sys
 import runpy
 import ipaddress
+import re
 
 from .base import TGA
 
 class SixGcVaeTGA(TGA):
-    """
-    A single-file approach to 6GAN TGA:
-     1) Clone a repo into a subdirectory with its own venv.
-     2) Install dependencies in that venv (tensorflow, gensim, scikit-learn, ipaddress).
-     3) Defer all logic (train.py, etc.) to the cloned repository.
-     4) Uses absolute paths for everything.
-    """
     def __init__(self, github_url: str, clone_directory: str = "repos"):
         super().__init__(github_url, clone_directory)
 
@@ -21,7 +15,20 @@ class SixGcVaeTGA(TGA):
         # First clone the repository
         self.clone()
         # Then initialize Python environment
-        self._initialize_python("3.8.12", ["tensorflow", "keras", "scikit-learn"])
+        self._initialize_python("3.8.12", [
+            "tensorflow-macos",
+            "keras",
+            "scikit-learn",
+        ])
+
+        self._patch_initialize(["gcnn_vae.py", "generation.py"])
+        self._patch_for_tf2(["gcnn_vae.py", "generation.py"])
+
+        self._patch_replace(
+            'generation.py',
+            "from tensorflow.keras.layers import Layer",
+            "from tensorflow.keras.layers import Layer\nimport numpy as np",
+        )
 
     def train(self, ipv6_addresses: list[str]) -> None:
         """
@@ -44,7 +51,6 @@ class SixGcVaeTGA(TGA):
             for addr in ipv6_addresses:
                 try:
                     full = ipaddress.IPv6Address(addr).exploded 
-                    print(full)
                 except ipaddress.AddressValueError:
                     raise ValueError(f"Invalid IPv6 address: '{addr}'")
 
@@ -59,7 +65,7 @@ class SixGcVaeTGA(TGA):
         os.makedirs(models_dir, exist_ok=True)
 
         # Call the existing training script
-        #    gcnn_vae.py’s run_model() will load data/processed_data/data.txt,
+        #    gcnn_vae.py's run_model() will load data/processed_data/data.txt,
         #    train the VAE, and save weights to models/gcnn_vae.model
         training_script = os.path.join(repo_path, 'gcnn_vae.py')
         print("Training the VAE...")
@@ -82,29 +88,29 @@ class SixGcVaeTGA(TGA):
         print("Training complete — weights saved to models/gcnn_vae.model")
 
     def generate(self, count: int) -> list[str]:
-        """
-        Placeholder method to generate new IPv6 addresses.
-        """
-
         print("Generating addresses...")
 
-        sys.path.append(os.path.join(self.clone_directory, self.repo_name))
-        import generation
-
-        generation.generation_number = count
-
-        # 4) Re-run generation.py as if it were __main__
         repo_path = os.path.abspath(os.path.join(self.clone_directory, self.repo_name))
         gen_py = os.path.join(repo_path, 'generation.py')
-        runpy.run_path(gen_py, run_name='__main__')
 
-        # 5) Read back the results
-        out_dir  = os.path.join(repo_path, 'data', 'generated_data')
-        # by default generation.py writes to "6gcvae_generation.txt"
+        self._patch_match('generation.py', r'generation_number\s*=\s*(\d+)', f'generation_number = {count}')
+
+        result = subprocess.run(
+            [self.env_python, gen_py],
+            cwd=repo_path,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True
+        )
+
+        if result.returncode != 0:
+            raise RuntimeError(f"Generation failed:\n{result.stderr}")
+
+        # Read back the file it produced
+        out_dir = os.path.join(repo_path, 'data', 'generated_data')
         out_file = os.path.join(out_dir, '6gcvae_generation.txt')
         if not os.path.exists(out_file):
-            raise FileNotFoundError(f"Expected output at {out_file}")
+            raise FileNotFoundError(f"Expected generation at {out_file}")
 
         with open(out_file, 'r') as f:
-            # strip newlines, ensure colon-format
             return [line.strip() for line in f]
