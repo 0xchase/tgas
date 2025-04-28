@@ -74,6 +74,7 @@ def build_parser(tgas):
     for tga_name, tga_cls in tgas.items():
         sp = train_sub.add_parser(tga_name, help=f"Train {tga_name}")
         sp.add_argument("--input-file", required=True, help="Path to a file containing IPv6 addresses, one per line.")
+        sp.add_argument("--limit", type=int, help="Maximum number of addresses to load for training. If not specified, loads all addresses.")
         # tga_cls.register_train_args(sp)
         # Optionally add other shared arguments
     

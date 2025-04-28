@@ -3,6 +3,7 @@ import subprocess
 
 from .base import TGA
 
+# TODO: Requires tensorflow 1.0
 class SixGANTGA(TGA):
     """
     A single-file approach to 6GAN TGA:
@@ -18,7 +19,7 @@ class SixGANTGA(TGA):
         # First clone the repository
         self.clone()
         # Then initialize Python environment
-        self._initialize_python("3.9.6", ["tensorflow", "gensim", "scikit-learn", "ipaddress"])
+        self._initialize_python("3.6.15", ["tensorflow==1.15", "tensorflow-metal", "gensim", "scikit-learn", "ipaddress", "pandas"])
 
     def train(self, ipv6_addresses: list[str]) -> None:
         """

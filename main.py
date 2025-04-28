@@ -14,15 +14,15 @@ addresses = [
 
 # List of target generation algorithms to use
 TGAS = {
-    "Entropy":  EntropyIp("https://github.com/akamai/entropy-ip.git"),
-    "6Tree":    TGA("https://github.com/sixiangdeweicao/6Tree.git"),
-    "DET":      TGA("https://github.com/sixiangdeweicao/DET"),
-    "6GCVAE":   TGA("https://github.com/CuiTianyu961030/6GCVAE.git"),
-    "6VecLM":   TGA("https://github.com/CuiTianyu961030/6VecLM.git"),
-    "6GAN":     SixGANTGA("https://github.com/CuiTianyu961030/6GAN.git"),
+    "6Forest":  SixForestTGA("https://github.com/Lab-ANT/6Forest.git"), # DONE
+    "6GAN":     SixGANTGA("https://github.com/CuiTianyu961030/6GAN.git"), # TODO: Requires tensorflow 1.0
+    "6GCVAE":   SixGcVaeTGA("https://github.com/CuiTianyu961030/6GCVAE.git"),
     "6Graph":   TGA("https://github.com/Lab-ANT/6Graph.git"),
-    "6Forest":  SixForestTGA("https://github.com/Lab-ANT/6Forest.git"),
     "6Scan":    TGA("https://github.com/hbn1987/6Scan.git"),
+    "6Tree":    SixTreeTGA("https://github.com/sixiangdeweicao/6Tree.git"), # TODO: Requires real-time scan feedback
+    "6VecLM":   TGA("https://github.com/CuiTianyu961030/6VecLM.git"),
+    "DET":      TGA("https://github.com/sixiangdeweicao/DET"),
+    "Entropy":  EntropyIp("https://github.com/akamai/entropy-ip.git"), # TODO: Requires tensorflow 1.0
 }
 
 def main():
@@ -48,6 +48,12 @@ def main():
                 # Read IPv6 addresses from the input file
                 with open(args.input_file, "r") as f:
                     addresses = [line.strip() for line in f if line.strip()]
+                
+                # Apply limit if specified
+                if hasattr(args, 'limit') and args.limit is not None:
+                    addresses = addresses[:args.limit]
+                    print(f"Limited to {len(addresses)} addresses for training")
+                
                 tga.train(addresses)
             elif args.action == "generate":
                 results = tga.generate(args.count)

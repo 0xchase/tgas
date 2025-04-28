@@ -10,6 +10,7 @@ class TGA:
         self.clone_directory = os.path.abspath(clone_directory)
         self.github_url = github_url
         self.repo_name = self._extract_repo_name()
+        self._python_version = None  # Track the Python version used for initialization
 
     def _extract_repo_name(self) -> str:
         repo_name = self.github_url.split('/')[-1]
@@ -18,6 +19,19 @@ class TGA:
         return repo_name
 
     def _initialize_python(self, python_version: str, deps: list[str]) -> None:
+        if python_version.count('.') != 2:
+            raise ValueError(f"Python version must be in format 'X.Y.Z' (e.g. '3.9.13'), got '{python_version}'")
+        
+        # Check if Python version has changed
+        if self._python_version != python_version:
+            print(f"Python version changed from {self._python_version} to {python_version}. Recreating virtual environment...")
+            self._python_version = python_version
+            # Force recreation of virtual environment
+            env_path = os.path.join(self.clone_directory, self.repo_name, "venv")
+            if os.path.exists(env_path):
+                print(f"Removing existing virtual environment at {env_path}...")
+                subprocess.run(["rm", "-rf", env_path], check=True)
+        
         print(f"Ensuring pyenv has Python {python_version} installed...")
         subprocess.run(["pyenv", "install", "--skip-existing", python_version], check=True)
 
@@ -56,6 +70,8 @@ class TGA:
         if not os.path.exists(self.env_python):
             raise FileNotFoundError(f"Could not find '{self.env_python}' in the virtual environment.")
 
+        # Add tqdm to the dependencies
+        deps = deps + ["tqdm"]
         print(f"Installing dependencies into {self.env_python}: {deps}")
         pip_cmd = [self.env_python, "-m", "pip", "install", "--upgrade", "pip"] + deps
         subprocess.run(pip_cmd, check=True)
