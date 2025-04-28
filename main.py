@@ -5,24 +5,21 @@ import sys
 from tgas import *
 from utils import *
 
-# Example IPv6 addresses for training
-addresses = [
-    "2001:0db8:85a3:0000:0000:8a2e:0370:7334",
-    "2001:0db8:85a3:0000:0000:8a2e:0370:7335",
-    "2001:0db8:85a3:0000:0000:8a2e:0370:7336",
-]
-
 # List of target generation algorithms to use
 TGAS = {
     "6Forest":  SixForestTGA("https://github.com/Lab-ANT/6Forest.git"),         # DONE
-    "6GAN":     SixGANTGA("https://github.com/CuiTianyu961030/6GAN.git"),       # TODO: Requires tensorflow 1.0
     "6GCVAE":   SixGcVaeTGA("https://github.com/CuiTianyu961030/6GCVAE.git"),   # DONE
     "6Graph":   SixGraphTGA("https://github.com/Lab-ANT/6Graph.git"),           # DONE
-    "6Scan":    TGA("https://github.com/hbn1987/6Scan.git"),                    # TODO: C++, real-time scan
-    "6Tree":    SixTreeTGA("https://github.com/sixiangdeweicao/6Tree.git"),     # TODO: real-time scan
-    "6VecLM":   SixVecLMTGA("https://github.com/CuiTianyu961030/6VecLM.git"),           # TODO
-    "DET":      TGA("https://github.com/sixiangdeweicao/DET"),                  # TODO
-    "Entropy":  EntropyIp("https://github.com/akamai/entropy-ip.git"),          # TODO: Requires tensorflow 1.0
+    "6Tree":    SixTreeTGA("https://github.com/sixiangdeweicao/6Tree.git"),     # DONE
+    "DET":      SixDETTGA("https://github.com/sixiangdeweicao/DET"),            # DONE
+
+    # Requires tensorflow 1.0
+    "6VecLM":   SixVecLMTGA("https://github.com/CuiTianyu961030/6VecLM.git"),   # TODO: 1.0
+    "Entropy":  EntropyIp("https://github.com/akamai/entropy-ip.git"),          # TODO: 1.0
+    "6GAN":     SixGANTGA("https://github.com/CuiTianyu961030/6GAN.git"),       # TODO: 1.0
+
+    # IMPLEMENTS: HMap6, 6Scan, 6Hit, 6Tree, 6Gen
+    "6Scan":    SixScanTGA("https://github.com/hbn1987/6Scan.git"),             # TODO: real-time scan, C++
 }
 
 def main():

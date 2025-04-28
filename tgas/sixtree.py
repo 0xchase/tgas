@@ -2,12 +2,13 @@ import os
 import subprocess
 import sys
 import random
+import urllib.request
 
 from .base import TGA
+from typing import Optional
 
-TEMP_FILE_NAME = "temp_addresses.txt"
+TEMP_FILE_NAME = "seeds.txt"
 
-# TODO: Requires real-time scan feedback
 class SixTreeTGA(TGA):
     """
     A single-file approach to 6GAN TGA:
@@ -16,60 +17,86 @@ class SixTreeTGA(TGA):
      3) Defer all logic (train.py, etc.) to the cloned repository.
      4) Uses absolute paths for everything.
     """
-    def __init__(self, github_url: str, clone_directory: str = "repos"):
+    def __init__(self, github_url: str, clone_directory: str = "repos", source_ipv6: Optional[str] = None):
         super().__init__(github_url, clone_directory)
+        # Allow override via constructor or LOCAL_IPV6 env var
+        self.source_ipv6 = source_ipv6 or os.environ.get("LOCAL_IPV6")
+        if not self.source_ipv6:
+            # Attempt to detect public IPv6 via external service
+            self.source_ipv6 = self._detect_local_ipv6_via_ipify()
+        if not self.source_ipv6:
+            print("[!] Warning: No source IPv6 provided or detected. Please set LOCAL_IPV6 or pass source_ipv6.")
 
     def initialize(self) -> None:
-        # First clone the repository
         self.clone()
-        # Then initialize Python environment
         self._initialize_python("3.9.1", [])
 
     def train(self, ipv6_addresses: list[str]) -> None:
-        """
-        1) Writes IPv6 addresses to 'source_file' in the repo directory.
-        2) Invokes 'train.py' to perform training.
-        """
         if not self.env_python:
             raise RuntimeError("Environment not initialized. Call initialize() first.")
-
-        # Write addresses to temp file in repo
         repo_path = os.path.abspath(os.path.join(self.clone_directory, self.repo_name))
         temp_file = os.path.join(repo_path, TEMP_FILE_NAME)
         with open(temp_file, "w") as f:
             for addr in ipv6_addresses:
                 f.write(addr + "\n")
-
-        print("Wrote seed addresses to temporary file")
+        print(f"[+] Wrote {len(ipv6_addresses)} seed addresses to {temp_file}")
 
     def generate(self, count: int) -> list[str]:
-        """
-        Placeholder method to generate new IPv6 addresses.
-        """
-
-        print("Generating addresses...")
-
-        # Import the necessary modules
-        sys.path.append(os.path.join(self.clone_directory, self.repo_name))
-        from AddrsToSeq import InputAddrs, SeqToAddrs
-
-        # Read addresses from temp file in repo
+        if not self.env_python:
+            raise RuntimeError("Environment not initialized. Call initialize() first.")
         repo_path = os.path.abspath(os.path.join(self.clone_directory, self.repo_name))
         temp_file = os.path.join(repo_path, TEMP_FILE_NAME)
-
-        # Exception if temp file doesn't exist
         if not os.path.exists(temp_file):
             raise FileNotFoundError(f"Seed file {temp_file} not found, run train() first")
 
-        # Convert addresses to sequence
-        input_addrs = InputAddrs(temp_file, beta=16)
-        targets = SeqToAddrs(input_addrs)
+        if not self.source_ipv6:
+            self.source_ipv6 = self._detect_local_ipv6_via_ipify()
+        if not self.source_ipv6:
+            raise RuntimeError("No source IPv6 provided or detected. Set LOCAL_IPV6 or pass source_ipv6.")
 
-        # Ensure the number of targets is greater than the requested count
-        if len(targets) < count:
-            raise ValueError(f"Requested {count} addresses, but only {len(targets)} targets available")
+        # Prepare output directories for scan results
+        output_dir = os.path.join(repo_path, "scan_output")
+        zmap_dir = os.path.join(output_dir, "zmap")
+        os.makedirs(zmap_dir, exist_ok=True)
 
-        # Sample a random subset of the targets
-        subset = random.sample(targets, count)
+        budget = count
+        dyn_scan = os.path.join(repo_path, "DynamicScan.py")
+        cmd = [
+            self.env_python,
+            dyn_scan,
+            "--input", temp_file,
+            "--budget", str(budget),
+            "--IPv6", self.source_ipv6,
+            "--output", output_dir
+        ]
 
+        print(f"[+] Running dynamic scan: {' '.join(cmd)}")
+        subprocess.run(cmd, check=True)
+
+        # Read the targets file produced by DynamicScan
+        target_file = os.path.join(output_dir, f"6Tree.target{budget}")
+        if not os.path.exists(target_file):
+            raise FileNotFoundError(f"Expected target file {target_file} not found")
+
+        with open(target_file) as f:
+            all_targets = [line.strip() for line in f if line.strip()]
+        if len(all_targets) < count:
+            raise ValueError(f"Requested {count} addresses, but only {len(all_targets)} targets available")
+
+        subset = random.sample(all_targets, count)
+        print(f"[+] Generated {len(subset)} target addresses from scan output")
         return subset
+
+    @staticmethod
+    def _detect_local_ipv6_via_ipify(timeout: float = 5.0) -> Optional[str]:
+        """
+        Queries a public IPv6 echo service (api64.ipify.org) to determine the host's public IPv6.
+        """
+        try:
+            with urllib.request.urlopen("https://api64.ipify.org?format=text", timeout=timeout) as resp:
+                ip = resp.read().decode().strip()
+                if ":" in ip:
+                    return ip
+        except Exception:
+            return None
+        return None

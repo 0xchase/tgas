@@ -1,9 +1,10 @@
 from .base import TGA
+from .det import *
 from .entropy import *
 from .sixforest import *
 from .sixgan import *
 from .sixgcvae import *
 from .sixgraph import *
-from .sixveclm import *
-
+from .sixscan import *
 from .sixtree import *
+from .sixveclm import *
