@@ -3,58 +3,21 @@ import subprocess
 import ipaddress
 import shutil
 
-from .base import TGA
+from .base import StaticTGA, DynamicTGA
 
-class SixDETTGA(TGA):
-    def __init__(self, github_url: str, clone_directory: str = "repos"):
-        super().__init__(github_url, clone_directory)
+class DET(DynamicTGA):
+    def setup(self) -> None:
+        self.clone("https://github.com/sixiangdeweicao/DET")
+        self.install_python("3.7.16")
 
-    def initialize(self) -> None:
-        # Clone and prepare Python 3.7
-        self.clone()
-        self._initialize_python("3.7.16", [])
-
-    def train(self, ipv6_addresses: list[str]) -> None:
-        if not self.env_python:
-            raise RuntimeError("Call initialize() first.")
-
-        repo_path = os.path.abspath(os.path.join(self.clone_directory, self.repo_name))
-        output_dir = os.path.join(repo_path, "output")
+    def run(self, addrs: list[str], count: int) -> None:
+        output_dir = os.path.join(self.clone_dir, "output")
         seeds_file = os.path.join(output_dir, "seeds.txt")
+        self.write_seeds(addrs, seeds_file, exploded=True)
 
-        # Make output directory
-        os.makedirs(output_dir, exist_ok=True)
-
-        print("Writing seeds...")
-        with open(seeds_file, "w") as f:
-            for addr in ipv6_addresses:
-                try:
-                    exploded = ipaddress.IPv6Address(addr).exploded
-                except ipaddress.AddressValueError:
-                    raise ValueError(f"Invalid IPv6 address: {addr!r}")
-                f.write(exploded + "\n")
-
-        print(f"Wrote {len(ipv6_addresses)} seeds to {seeds_file}")
-
-    def generate(self, count: int) -> list[str]:
-        if not self.env_python:
-            raise RuntimeError("Call initialize() first.")
-
-        repo_path = os.path.abspath(os.path.join(self.clone_directory, self.repo_name))
-        output_dir = os.path.join(repo_path, "output")
-        seeds_file = os.path.join(output_dir, "seeds.txt")
-
-        if not os.path.isfile(seeds_file):
-            raise RuntimeError("seeds.txt not found; run train(...) first.")
-
-        # read the first seed as source_ip
-        with open(seeds_file) as f:
-            first = next((line.strip() for line in f if line.strip()), None)
-
-        if not first:
-            raise RuntimeError("seeds.txt is empty")
-
-        source_ip = first
+        first = addrs[0]
+        # TODO
+        source_ip = None
 
         # Delete old zmap directory
         zmap_dir = os.path.join(output_dir, "zmap")
