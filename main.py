@@ -7,7 +7,7 @@ from utils import *
 
 # List of target generation algorithms to use
 TGAS = {
-    "DET":      DET,
+    "det":      DET,
     "6Forest":  SixForestTGA,
     "6GCVAE":   SixGcVaeTGA,
     "6Graph":   SixGraphTGA,
@@ -26,7 +26,7 @@ def main():
     parser = build_parser(TGAS)
     args = parser.parse_args()
 
-    if args.action in ("run", "train", "generate", "clean"):
+    if args.action in ("setup", "train", "generate", "run", "clean"):
         tga_name = getattr(args, "tga_name", None)
         tga = TGAS.get(tga_name)()
         if not tga:
@@ -38,38 +38,48 @@ def main():
             tga.setup()
         elif args.action == "clean":
             tga.clean()
-        elif args.action == "generate":
-            results = tga.generate(args.count)
-            
-            # write output to a file if user provided it
-            output_path = getattr(args, "output", None)
-            if output_path:
-                with open(output_path, "w") as f:
-                    for line in results:
-                        f.write(line + "\n")
         else:
-            with open(args.input_file, "r") as f:
-                addresses = [line.strip() for line in f if line.strip()]
+            if not os.path.exists(tga.clone_dir):
+                print("TGA must be setup before generating or running", file=sys.stderr)
+                sys.exit(1)
 
-            if args.action == "train":
-                # apply limit if specified
-                if hasattr(args, 'limit') and args.limit is not None:
-                    addresses = addresses[:args.limit]
-                # train the TGA
-                tga.train(addresses)
-            elif args.action == "run":
-                # run the TGA
-                results = tga.run(args.count)
-                # handle --output if user provided it
+            if args.action == "generate":
+                results = tga.generate(args.count)
+                
+                # write output to a file if user provided it
                 output_path = getattr(args, "output", None)
                 if output_path:
                     with open(output_path, "w") as f:
                         for line in results:
                             f.write(line + "\n")
-                else:
-                    # print to stdout
-                    for line in results:
-                        print(line)
+            else:
+                if not hasattr(args, 'seeds'):
+                    print("Must specify --seeds", file=sys.stderr)
+                    sys.exit(1)
+
+                print(f"Loading seeds from {args.seeds}")
+                with open(args.seeds, "r") as f:
+                    addresses = [line.strip() for line in f if line.strip()]
+
+                    # apply limit if specified
+                    if hasattr(args, 'limit') and args.limit is not None:
+                        addresses = addresses[:args.limit]
+
+                    if args.action == "train":
+                        tga.train(addresses)
+                    elif args.action == "run":
+                        # run the TGA
+                        results = tga.run(addresses, args.count)
+                        # handle --output if user provided it
+                        output_path = getattr(args, "output", None)
+                        if output_path:
+                            with open(output_path, "w") as f:
+                                for line in results:
+                                    f.write(line + "\n")
+                        else:
+                            # print to stdout
+                            for line in results:
+                                print(line)
     else:
         parser.print_help()
 

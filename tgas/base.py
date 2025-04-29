@@ -5,7 +5,7 @@ import re
 import tempfile
 
 SETUP_DIR = os.path.abspath("setup")
-SCAN_DIR = os.path.abspath("scan")
+RUN_DIR = os.path.abspath("run")
 
 class TGA:
     def __init__(self):
@@ -18,19 +18,31 @@ class TGA:
         self.clone_dir = os.path.join(self.setup_dir, "tga")
         self.deps_dir = os.path.join(self.setup_dir, "deps")
         self.env_dir = os.path.join(self.setup_dir, "env")
+
+        # Run directory
+        self.run_dir = os.path.join(RUN_DIR, self.name)
+
+        # Setup logs
         self.setup_log = os.path.join(self.setup_dir, "setup.log")
+        self.run_log = os.path.join(self.run_dir, "run.log")
 
-        # Scan directory
-        self.scan_dir = os.path.join(SCAN_DIR, self.name)
+        # Other
+        self.python = os.path.join(self.env_dir, "bin", "python")
 
-        self.python = None
-        self.log = None
+        os.makedirs(SETUP_DIR, exist_ok=True)
+        os.makedirs(RUN_DIR, exist_ok=True)
+        os.makedirs(self.setup_dir, exist_ok=True)
+        os.makedirs(self.run_dir, exist_ok=True)
 
-    def run_cmd(self, cmd, cwd=None):
+    def setup_cmd(self, cmd):
         shell = isinstance(cmd, str)
-        logf = self.get_log_file()
-        with open(logf, 'a') as stdout:
-            subprocess.run(cmd, cwd=cwd, shell=shell, stdout=stdout, stderr=subprocess.STDOUT, check=True)
+        with open(self.setup_log, 'a+') as stdout:
+            subprocess.run(cmd, cwd=self.clone_dir, shell=shell, stdout=stdout, stderr=subprocess.STDOUT, check=True)
+
+    def run_cmd(self, cmd):
+        shell = isinstance(cmd, str)
+        with open(self.run_log, 'a+') as stdout:
+            return subprocess.run(cmd, cwd=self.clone_dir, shell=shell, stdout=stdout, stderr=subprocess.STDOUT, check=True)
 
     def clone(self, url: str) -> None:
         if not os.path.exists(self.clone_dir):
@@ -42,7 +54,7 @@ class TGA:
     def clean(self) -> None:
         if os.path.exists(self.setup_dir):
             print(f"Deleting setup {self.name} at {self.setup_dir}...")
-            subprocess.run(["rm", "-rf", self.setup_dir], check=True)
+            self.setup_cmd(["rm", "-rf", self.setup_dir])
         else:
             print(f"Nothing to clean at {self.setup_dir}")
     
@@ -67,11 +79,10 @@ class TGA:
                 
                 if venv_version == version:
                     print(f"Python environment exists at {self.env_dir} with version {version}")
-                    self.python = venv_python
                     return
                 
                 print(f"Removing existing virtual environment at {self.env_dir}")
-                subprocess.run(["rm", "-rf", self.env_dir], check=True)
+                self.setup_cmd(["rm", "-rf", self.env_dir])
         
         # Create the environment directory
         os.makedirs(self.env_dir, exist_ok=True)
@@ -83,34 +94,33 @@ class TGA:
         if "Python 2." in ver_str:
             # Use virtualenv for Python 2
             print(f"Installing virtualenv for Python 2...")
-            subprocess.run([python_executable, "-m", "pip", "install", "--upgrade", "pip", "virtualenv"], check=True)
+            self.setup_cmd([python_executable, "-m", "pip", "install", "--upgrade", "pip", "virtualenv"])
             print(f"Creating Python 2 virtual environment at {self.env_dir}...")
-            subprocess.run([python_executable, "-m", "virtualenv", self.env_dir], check=True)
+            self.setup_cmd([python_executable, "-m", "virtualenv", self.env_dir])
         else:
             # Use built-in venv for Python 3
             print(f"Creating Python 3 virtual environment at {self.env_dir}...")
-            subprocess.run([python_executable, "-m", "venv", self.env_dir], check=True)
+            self.setup_cmd([python_executable, "-m", "venv", self.env_dir])
         
         # Verify the environment was created successfully
-        self.python = os.path.join(self.env_dir, "bin", "python")
         if not os.path.exists(self.python):
             raise FileNotFoundError(f"Could not find '{self.python}' in the virtual environment")
         
-        print(f"Python {version} environment created successfully at {self.env_dir}")
+        print(f"Python {version} environment created at {self.env_dir}")
     
     def install_packages(self, deps: list[str]) -> None:
-        if not self.python:
+        if not os.path.exists(self.python):
             raise RuntimeError("Python environment not installed")
             
         print(f"Installing packages into {self.python}: {deps}")
         
         # Upgrade pip first
-        subprocess.run([self.python, "-m", "pip", "install", "--upgrade", "pip"], check=True)
+        self.setup_cmd([self.python, "-m", "pip", "install", "--upgrade", "pip"])
         
         # Install the packages
         pip_cmd = [self.python, "-m", "pip", "install"]
         pip_cmd.extend(deps)
-        subprocess.run(pip_cmd, check=True)
+        self.setup_cmd(pip_cmd)
         
         print("Packages installed successfully")
 

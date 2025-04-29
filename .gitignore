@@ -1,3 +1,5 @@
 repos/**
 data/**
+run/**
+setup/**
 **/__pycache__/**

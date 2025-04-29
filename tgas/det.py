@@ -11,13 +11,16 @@ class DET(DynamicTGA):
         self.install_python("3.7.16")
 
     def run(self, addrs: list[str], count: int) -> None:
-        output_dir = os.path.join(self.clone_dir, "output")
+        output_dir = os.path.join(self.setup_dir, "output")
+        os.makedirs(output_dir, exist_ok=True)
+
         seeds_file = os.path.join(output_dir, "seeds.txt")
         self.write_seeds(addrs, seeds_file, exploded=True)
 
         first = addrs[0]
-        # TODO
-        source_ip = None
+
+        # TODO: THIS IS WRONG
+        source_ip = addrs[0]
 
         # Delete old zmap directory
         zmap_dir = os.path.join(output_dir, "zmap")
@@ -26,7 +29,7 @@ class DET(DynamicTGA):
         os.makedirs(zmap_dir)
 
         cmd = [
-            self.env_python,
+            self.python,
             "DynamicScan.py",
             "--input", seeds_file,
             "--output", output_dir,
@@ -35,14 +38,7 @@ class DET(DynamicTGA):
         ]
 
         print("Running scan...")
-        proc = subprocess.run(
-            cmd,
-            cwd=repo_path,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-        )
-
+        proc = self.run_cmd(cmd)
         if proc.returncode != 0:
             raise RuntimeError(f"DynamicScan.py failed:\n{proc.stderr}")
 

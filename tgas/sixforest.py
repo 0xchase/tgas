@@ -5,13 +5,6 @@ import random
 from .base import TGA
 
 class SixForestTGA(TGA):
-    """
-    A single-file approach to 6Forest TGA:
-     1) Clone a repo into a subdirectory with its own venv.
-     2) Install dependencies in that venv (numpy>=1.21.2, IPy>=1.1).
-     3) Defer all logic (convert.py, main.py, etc.) to the cloned repository.
-     4) Uses absolute paths for everything.
-    """
     def __init__(self, github_url: str, clone_directory: str = "repos"):
         super().__init__(github_url, clone_directory)
 

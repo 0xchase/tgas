@@ -65,7 +65,6 @@ def parse_args():
 
 def build_parser(tgas):
     parser = argparse.ArgumentParser(description="Script for running TGAs")
-
     subparsers = parser.add_subparsers(dest="action", required=True, help="Action to perform")
 
     # Setup
@@ -73,8 +72,6 @@ def build_parser(tgas):
     setup_sub = setup_parser.add_subparsers(dest="tga_name", required=True, help="Which TGA to train?")
     for tga_name, tga_cls in tgas.items():
         sp = setup_sub.add_parser(tga_name, help=f"Setup {tga_name}")
-        sp.add_argument("--input-file", required=True, help="Path to a file containing IPv6 addresses, one per line.")
-        sp.add_argument("--limit", type=int, help="Maximum number of addresses to load for training. If not specified, loads all addresses.")
 
     # Clean
     clean_parser = subparsers.add_parser("clean", help="Clean a TGA setup")
@@ -86,16 +83,16 @@ def build_parser(tgas):
     train_parser = subparsers.add_parser("train", help="Train a static TGA")
     train_sub = train_parser.add_subparsers(dest="tga_name", required=True, help="Which TGA to train?")
     for tga_name, tga_cls in tgas.items():
-        if tga_cls.isinstance(StaticTGA):
+        if issubclass(tga_cls, StaticTGA):
             sp = train_sub.add_parser(tga_name, help=f"Train {tga_name}")
             sp.add_argument("--seeds", required=True, help="Path to a file containing IPv6 addresses, one per line.")
-            sp.add_argument("--count", type=int, help="Number of addresses to load for training. If not specified, loads all addresses.")
+            sp.add_argument("--limit", type=int, help="Number of addresses to load for training. If not specified, loads all addresses.")
     
     # Generate
     gen_parser = subparsers.add_parser("generate", help="Generate addresses using a TGA")
     gen_sub = gen_parser.add_subparsers(dest="tga_name", required=True, help="Which TGA to generate with?")
     for tga_name, tga_cls in tgas.items():
-        if tga_cls.isinstance(StaticTGA):
+        if issubclass(tga_cls, StaticTGA):
             sp = gen_sub.add_parser(tga_name, help=f"Generate with {tga_name}")
             sp.add_argument("--count", type=int, required=True, help="Number of addresses to generate")
             sp.add_argument("--output", help="File path to write generated addresses. If omitted, prints to stdout")
@@ -104,7 +101,11 @@ def build_parser(tgas):
     run_parser = subparsers.add_parser("run", help="Run a dynamic TGA")
     run_sub = run_parser.add_subparsers(dest="tga_name", required=True, help="Which TGA to run?")
     for tga_name, tga_cls in tgas.items():
-        if tga_cls.isinstance(DynamicTGA):
+        if issubclass(tga_cls, DynamicTGA):
             sp = run_sub.add_parser(tga_name, help=f"Run {tga_name}")
+            sp.add_argument("--seeds", required=True, help="Path to a file containing IPv6 addresses, one per line.")
+            sp.add_argument("--limit", type=int, help="Number of addresses to load for training. If not specified, loads all addresses.")
+            sp.add_argument("--count", type=int, required=True, help="Number of addresses to generate")
+            sp.add_argument("--output", help="File path to write generated addresses. If omitted, prints to stdout")
             
     return parser
