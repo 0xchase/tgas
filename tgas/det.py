@@ -10,7 +10,7 @@ class DET(DynamicTGA):
         self.clone("https://github.com/sixiangdeweicao/DET")
         self.install_python("3.7.16")
 
-    def run(self, addrs: list[str], count: int) -> None:
+    def run(self, addrs: list[str], budget: int) -> None:
         output_dir = os.path.join(self.setup_dir, "output")
         os.makedirs(output_dir, exist_ok=True)
 
@@ -33,12 +33,12 @@ class DET(DynamicTGA):
             "DynamicScan.py",
             "--input", seeds_file,
             "--output", output_dir,
-            "--budget", str(count),
+            "--budget", str(budget),
             "--IPv6", source_ip,
         ]
 
         print("Running scan...")
-        proc = self.run_cmd(cmd)
+        proc = self.cmd(cmd)
         if proc.returncode != 0:
             raise RuntimeError(f"DynamicScan.py failed:\n{proc.stderr}")
 

@@ -2,80 +2,35 @@ import os
 import subprocess
 import random
 
-from .base import TGA
+from .base import StaticTGA, DynamicTGA
 
-class SixForestTGA(TGA):
-    def __init__(self, github_url: str, clone_directory: str = "repos"):
-        super().__init__(github_url, clone_directory)
+class SixForestTGA(StaticTGA):
+    def setup(self) -> None:
+        self.clone("https://github.com/Lab-ANT/6Forest")
+        self.install_python("3.9.6")
+        self.install_packages(["numpy==1.21.2", "IPy==1.1"])
 
-    def initialize(self) -> None:
-        # First clone the repository
-        self.clone()
-        # Then initialize Python environment
-        self._initialize_python("3.9.6", ["numpy==1.21.2", "IPy==1.1"])
+    def train(self, seeds: list[str]) -> None:
+        # Write seeds
+        os.makedirs(self.train_dir, exist_ok=True)
+        self.write_seeds(seeds, os.path.join(self.train_dir, "seeds.txt"))
 
-    def train(self, ipv6_addresses: list[str]) -> None:
-        """
-        1) Writes IPv6 addresses to 'seeds' in the repo directory.
-        2) Invokes 'convert.py' if present, then (optionally) invokes 'main.py'
-           or another script from the cloned repo to do the actual training/analysis.
-        """
-        if not self.env_python:
-            raise RuntimeError("Environment not initialized. Call initialize() first.")
+        # Convert seeds into seeds.npy
+        print(f"Converting seeds into seeds.npy")
+        self.cmd([self.python, os.path.join(self.clone_dir, "convert.py")])
 
-        print(f"Training the SixForest model in repo '{self.repo_name}'...")
-
-        repo_path = os.path.abspath(os.path.join(self.clone_directory, self.repo_name))
-        seeds_file = os.path.join(repo_path, "seeds")
-
-        # Step 1: Write seeds
-        with open(seeds_file, "w") as f:
-            for addr in ipv6_addresses:
-                f.write(addr + "\n")
-
-        # Step 2: convert.py => seeds.npy if present
-        convert_script = os.path.join(repo_path, "convert.py")
-        if os.path.exists(convert_script):
-            print(f"Running {convert_script} to generate seeds.npy...")
-            subprocess.run([
-                self.env_python,
-                convert_script
-            ], cwd=repo_path, check=True)
-        else:
-            print("No convert.py found; skipping conversion step.")
-
-        # (Optional) Step 3: main.py for 6Forest logic
-        main_script = os.path.join(repo_path, "main.py")
-        if os.path.exists(main_script):
-            output_file = os.path.join(repo_path, "main_output.txt")
-            print(f"Running {main_script} to perform 6Forest analysis and redirecting output to {output_file}...")
-            with open(output_file, "w") as f:
-                subprocess.run([
-                    self.env_python,
-                    main_script
-                ], cwd=repo_path, check=True, stdout=f, stderr=subprocess.STDOUT)
-        else:
-            print("No main.py found; skipping local 6Forest analysis script.")
-
-        print("Training complete (logic handled in the cloned repo).")
+        # Main logic
+        main_script = os.path.join(self.clone_dir, "main.py")
+        output_file = os.path.join(self.train_dir, "main_output.txt")
+        print(f"Running 6Forest analysis and redirecting output to {output_file}")
+        with open(output_file, "w") as f:
+            subprocess.run([self.python, main_script], cwd=self.clone_dir, check=True, stdout=f, stderr=subprocess.STDOUT)
 
     def generate(self, count: int) -> list[str]:
-        """
-        Parses the output file from the training process to obtain the first address directly below the "Region" divider,
-        and generates the desired number of full IP addresses by replacing '*' with random values.
-        The generated addresses are formatted with colons in the appropriate places.
-        """
-        print("Generating addresses from the output file...")
+        output_file = os.path.join(self.train_dir, "main_output.txt")
 
-        repo_path = os.path.abspath(os.path.join(self.clone_directory, self.repo_name))
-        output_file = os.path.join(repo_path, "main_output.txt")
-
-        if not os.path.exists(output_file):
-            print(f"Output file {output_file} does not exist. Cannot generate addresses.")
-            return []
-
+        # Read partial addresses
         partial_addresses = []
-
         with open(output_file, "r") as f:
             lines = [line.strip() for line in f if line.strip()]
 
@@ -92,8 +47,7 @@ class SixForestTGA(TGA):
                 if len(full_addresses) >= count:
                     break
                 full_address = ''.join(random.choice('0123456789abcdef') if c == '*' else c for c in partial)
-                # Format the address with colons
                 formatted_address = ':'.join(full_address[i:i+4] for i in range(0, len(full_address), 4))
                 full_addresses.append(formatted_address)
-
+                
         return full_addresses[:count]

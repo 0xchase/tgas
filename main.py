@@ -5,21 +5,18 @@ import sys
 from tgas import *
 from utils import *
 
-# List of target generation algorithms to use
 TGAS = {
-    "det":      DET,
-    "6Forest":  SixForestTGA,
-    "6GCVAE":   SixGcVaeTGA,
-    "6Graph":   SixGraphTGA,
-    "6Tree":    SixTreeTGA,
-
-    # Requires tensorflow 1.0
+    "det":      DET,            # TODO (dynamic)
+    "entropy":  EntropyIp,      # PARTIAL
+    "6Forest":  SixForestTGA,   # DONE
+    "6GCVAE":   SixGcVaeTGA,    # DONE
+    "6Graph":   SixGraphTGA,    # DONE
+    "6Tree":    SixTreeTGA,     # TODO (dynamic)
     "6VecLM":   SixVecLMTGA,
-    "Entropy":  EntropyIp,
-    "6GAN":     SixGANTGA,
+    "6GAN":     SixGANTGA,      # PARTIAL
 
     # IMPLEMENTS: HMap6, 6Scan, 6Hit, 6Tree, 6Gen
-    "6Scan":    SixScanTGA,
+    "6Scan":    SixScanTGA,     # TODO (dynamic)
 }
 
 def main():
@@ -35,15 +32,17 @@ def main():
         
         # dispatch
         if args.action == "setup":
+            tga.log = os.path.join(tga.setup_dir, "setup.log")
             tga.setup()
         elif args.action == "clean":
             tga.clean()
         else:
             if not os.path.exists(tga.clone_dir):
-                print("TGA must be setup before generating or running", file=sys.stderr)
-                sys.exit(1)
+                tga.log = os.path.join(tga.setup_dir, "setup.log")
+                tga.setup()
 
             if args.action == "generate":
+                tga.log = os.path.join(tga.setup_dir, "generate.log")
                 results = tga.generate(args.count)
                 
                 # write output to a file if user provided it
@@ -52,6 +51,9 @@ def main():
                     with open(output_path, "w") as f:
                         for line in results:
                             f.write(line + "\n")
+                else:
+                            for line in results:
+                                print(line)
             else:
                 if not hasattr(args, 'seeds'):
                     print("Must specify --seeds", file=sys.stderr)
@@ -66,9 +68,11 @@ def main():
                         addresses = addresses[:args.limit]
 
                     if args.action == "train":
+                        tga.log = os.path.join(tga.setup_dir, "run.log")
                         tga.train(addresses)
                     elif args.action == "run":
                         # run the TGA
+                        tga.log = os.path.join(tga.setup_dir, "run.log")
                         results = tga.run(addresses, args.count)
                         # handle --output if user provided it
                         output_path = getattr(args, "output", None)
