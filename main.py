@@ -7,13 +7,13 @@ from utils import *
 
 TGAS = {
     "det":      DET,            # TODO (dynamic)
-    "entropy":  EntropyIp,      # PARTIAL
+    "entropy":  EntropyIp,      # PARTIAL (hangs)
     "6Forest":  SixForestTGA,   # DONE
     "6GCVAE":   SixGcVaeTGA,    # DONE
     "6Graph":   SixGraphTGA,    # DONE
     "6Tree":    SixTreeTGA,     # TODO (dynamic)
-    "6VecLM":   SixVecLMTGA,
-    "6GAN":     SixGANTGA,      # PARTIAL
+    "6VecLM":   SixVecLMTGA,    # PARTIAL (error)
+    "6GAN":     SixGANTGA,      # PARTIAL (hangs)
 
     # IMPLEMENTS: HMap6, 6Scan, 6Hit, 6Tree, 6Gen
     "6Scan":    SixScanTGA,     # TODO (dynamic)
@@ -68,7 +68,7 @@ def main():
                         addresses = addresses[:args.limit]
 
                     if args.action == "train":
-                        tga.log = os.path.join(tga.setup_dir, "run.log")
+                        tga.log = os.path.join(tga.setup_dir, "train.log")
                         tga.train(addresses)
                     elif args.action == "run":
                         # run the TGA

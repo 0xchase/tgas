@@ -3,27 +3,13 @@ import subprocess
 import ipaddress
 import random
 
-from .base import TGA
+from .base import StaticTGA, DynamicTGA
 
-class SixVecLMTGA(TGA):
+class SixVecLMTGA(StaticTGA):
     def setup(self) -> None:
         self.clone("https://github.com/CuiTianyu961030/6VecLM")
         self.install_python("3.7.16")
         self.install_packages(["torch==1.3.1", "torchvision", "torchaudio", "gensim==3.6.0", "scikit-learn", "torchsummary", "matplotlib", "seaborn"])
-
-        #self._initialize_python(
-        #    "3.7.16",
-        #    [
-        #        "torch",
-        #        "gensim",
-        #        "scikit-learn",
-        #        "numpy",
-        #        "pandas",
-        #        "matplotlib",
-        #        "seaborn",
-        #        "torchsummary",
-        #    ],
-        #)
 
     def train(self, seeds: list[str]) -> None:
         # Write seeds
@@ -32,18 +18,18 @@ class SixVecLMTGA(TGA):
 
         # Process data
         print("Processing data")
-        run = self.cmd([self.env_python, "data_processing.py"])
+        run = self.cmd([self.python, "data_processing.py"])
         if run.returncode != 0:
             raise RuntimeError(f"data_processing.py failed:\n{run.stderr}")
 
         # Convert to vectors
         print("Converting to vectors")
-        run = self.cmd([self.env_python, "ipv62vec.py"])
+        run = self.cmd([self.python, "ipv62vec.py"])
         if run.returncode != 0:
             raise RuntimeError(f"ipv62vec.py failed:\n{run.stderr}")
         
         # Transformer
-        run = self.cmd([self.env_python, "ipv6_transformer.py"])
+        run = self.cmd([self.python, "ipv6_transformer.py"])
         if run.returncode != 0:
             raise RuntimeError(f"ipv6_transformer.py failed:\n{run.stderr}")
 
