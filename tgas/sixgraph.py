@@ -13,13 +13,6 @@ class SixGraphTGA(StaticTGA):
         self.install_python("3.7.16")
         self.install_packages(["IPy", "numpy==1.21.2", "networkx"])
 
-        #self._patch_initialize(["PatternMining.py"])
-        #self._patch_replace(
-        #    "PatternMining.py",
-        #    "return len(arrs) / xi",
-        #    "if xi == 0: return float('inf')\n    return len(arrs) / xi"
-        #)
-
     def train(self, seeds: list[str]) -> None:
         print(f"Writing seeds")
         self.write_seeds(seeds, os.path.join(self.clone_dir, "seeds.txt"), exploded=True)
@@ -61,7 +54,6 @@ class SixGraphTGA(StaticTGA):
             addr = ipaddress.IPv6Address(int(filled, 16))
             return addr.exploded
 
-        # Sample unique IPs until we reach the desired count
         unique_ips = set()
         miniters = max(100, count // 100)
         with tqdm.tqdm(total=count, desc="Generating unique IPs", miniters=miniters) as pbar:
