@@ -10,7 +10,7 @@ Do TGAs even work?
 
 - [ ] **Pattern-Based Scanning (2015)** – learns the most common bit-patterns in a seed set and fixes them recursively to generate candidates. [Paper](https://doi.org/10.1109/ARES.2015.140)  
 - [/] **Entropy/IP (2016)** – measures nybble-level entropy and builds a Bayesian model to sample new addresses matching observed statistics. [GitHub](https://github.com/akamai/entropy-ip)  
-- [ ] **6Gen (2017)** – clusters seed addresses by Hamming distance and outputs unobserved neighbors in the densest clusters. [Paper](https://doi.org/10.1145/3131365.3131382)  
+- [x] **6Gen (2017)** – clusters seed addresses by Hamming distance and outputs unobserved neighbors in the densest clusters. [Paper](https://doi.org/10.1145/3131365.3131382)  
 - [x] **6Graph (2022)** – constructs a co-occurrence graph of address segments and recombines frequent subgraphs into new addresses. [Paper](https://doi.org/10.1016/j.comnet.2021.108666)  
 - [x] **6Forest (2022)** – builds multiple space-partitioning trees (an ensemble) to cover diverse seed patterns before scanning. [Paper](https://doi.org/10.1109/INFOCOM.2022.9767014)  
 - [.] **DET (2022)** – splits on the highest-entropy bits in the seed set to generate candidates with maximal variability. [Paper](https://doi.org/10.1109/TNET.2022.9678456)  
