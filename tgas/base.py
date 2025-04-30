@@ -2,7 +2,10 @@ import os
 import subprocess
 import ipaddress
 import re
+import tqdm
 import tempfile
+
+import tqdm._tqdm
 
 SETUP_DIR = os.path.abspath("setup")
 RUN_DIR = os.path.abspath("run")
@@ -129,8 +132,9 @@ class TGA:
     def write_seeds(self, addrs: list[str], seeds_file: str, colan=True, exploded: bool = False) -> None:
         print(f"Writing {len(addrs)} seeds to {seeds_file}")
 
+        miniters = max(100, len(addrs) // 100)
         with open(seeds_file, "w+") as f:
-            for addr in addrs:
+            for addr in tqdm.tqdm(addrs, desc="Writing seeds", miniters=miniters):
                 if exploded:
                     try:
                         exploded = ipaddress.IPv6Address(addr).exploded

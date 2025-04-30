@@ -3,6 +3,7 @@ import subprocess
 import ipaddress
 import random
 import re
+import tqdm
 
 from .base import StaticTGA, DynamicTGA
 
@@ -60,5 +61,14 @@ class SixGraphTGA(StaticTGA):
             addr = ipaddress.IPv6Address(int(filled, 16))
             return addr.exploded
 
-        # sample and return
-        return [ sample_ip(random.choice(patterns)) for _ in range(count) ]
+        # Sample unique IPs until we reach the desired count
+        unique_ips = set()
+        miniters = max(100, count // 100)
+        with tqdm.tqdm(total=count, desc="Generating unique IPs", miniters=miniters) as pbar:
+            while len(unique_ips) < count:
+                ip = sample_ip(random.choice(patterns))
+                if ip not in unique_ips:
+                    unique_ips.add(ip)
+                    pbar.update(1)
+
+        return list(unique_ips)
