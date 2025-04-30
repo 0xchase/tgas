@@ -13,19 +13,19 @@ class SixGANTGA(StaticTGA):
         self.install_packages(["tensorflow-gpu==1.15.5", "gensim==3.8.3", "pandas", "numpy", "ipaddress"])
         self.install_packages(["protobuf==3.12.2"])
 
-        #pip install scikit-learn
-        #pip install tensorflow-gpu==1.15.5 pandas gensim==3.8.3 numpy ipaddress
-        #pip install protobuf==3.12.2
-        #conda install cudatoolkit=10.0 -y
-        #conda install cudnn=7.6.5 -y
+        # Build the dependency
+        os.makedirs(self.deps_dir, exist_ok=True)
 
-        # Clone and build the ipv6toolkit repo
-        #TGA("https://github.com/fgont/ipv6toolkit").clone()
-        #subprocess.run(["make", "addr6"], cwd="repos/ipv6toolkit", check=True)
-
-        # Other patches
-        #self._patch_replace("generator.py", "tf.random_normal(", "tf.random.normal(")
-        #self._patch_replace("classifier.py", "../../Tools/ipv6toolkit/addr6", "../ipv6toolkit/addr6")
+        dest = os.path.join(self.deps_dir, "ipv6toolkit")
+        if not os.path.exists(dest):
+            url = "https://github.com/fgont/ipv6toolkit"
+            self.cmd(["git", "clone", url, dest])
+        
+        if not os.path.exists(os.path.join(dest, "addr6")):
+            subprocess.run(["make", "addr6"], cwd=dest, stdout=self.log)
+        
+        # Patch dependency location
+        self.patch("classifier.py", "../../Tools/ipv6toolkit/addr6", "../deps/ipv6toolkit/addr6")
 
     def train(self, seeds: list[str]) -> None:
         # Write seeds

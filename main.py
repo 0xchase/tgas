@@ -13,7 +13,7 @@ TGAS = {
 
     "6Gen":     SixGenTGA,      # DONE (linux-only)
     "6GCVAE":   SixGcVaeTGA,    # DONE (linux-only)
-    "entropy":  EntropyIp,      # PARTIAL (hangs, linux-only)
+    "entropy":  EntropyIp,      # DONE (linux-only)
 
     "det":      DET,            # TODO (dynamic)
     "6Tree":    SixTreeTGA,     # TODO (dynamic)
