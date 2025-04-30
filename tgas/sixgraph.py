@@ -5,7 +5,7 @@ import random
 import re
 import tqdm
 
-from .base import StaticTGA, DynamicTGA
+from .base import StaticTGA, DynamicTGA, sample_ip
 
 class SixGraphTGA(StaticTGA):
     def setup(self) -> None:
@@ -47,12 +47,6 @@ class SixGraphTGA(StaticTGA):
 
         if not patterns:
             raise RuntimeError("No patterns found in patterns.txt")
-
-        def sample_ip(pat: str) -> str:
-            # replace each '*' by a random hex digit
-            filled = "".join(c if c != "*" else random.choice("0123456789abcdef") for c in pat)
-            addr = ipaddress.IPv6Address(int(filled, 16))
-            return addr.exploded
 
         unique_ips = set()
         miniters = max(100, count // 100)

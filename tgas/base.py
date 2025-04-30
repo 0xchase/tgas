@@ -3,6 +3,7 @@ import subprocess
 import ipaddress
 import re
 import tqdm
+import random
 import tempfile
 
 import tqdm._tqdm
@@ -148,6 +149,22 @@ class TGA:
                         addr = addr.replace(":", "")
                     f.write(addr + "\n")
 
+    def patch(self, file_name: str, old_text: str, new_text: str) -> None:
+         path = os.path.join(self.clone_dir, file_name)
+         
+         # Read original
+         with open(path, 'r', encoding='utf-8') as f:
+             content = f.read()
+         
+         # Replace
+         patched = content.replace(old_text, new_text)
+         
+         # Write back only if changed
+         if patched != content:
+             print(f"Patching {file_name} to replace {old_text} with {new_text}")
+             with open(path, 'w', encoding='utf-8') as f:
+                 f.write(patched)
+
     def patch_match(self, file_name: str, pattern: str, replacement: str) -> None:
         path = os.path.join(self.clone_dir, file_name)
         
@@ -180,3 +197,9 @@ class DynamicTGA(TGA):
     
     def run(self, seeds: list[str], budget: int) -> list[str]:
         raise NotImplementedError("")
+
+def sample_ip(pat: str) -> str:
+    # replace each '*' or '?' with a random hex digit
+    filled = "".join(c if c != "*" and c != "?" else random.choice("0123456789abcdef") for c in pat)
+    addr = ipaddress.IPv6Address(int(filled, 16))
+    return addr.exploded

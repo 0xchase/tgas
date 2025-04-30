@@ -12,6 +12,7 @@ TGAS = {
     "entropy":  EntropyIp,      # PARTIAL (hangs, linux-only)
     "6VecLM":   SixVecLMTGA,    # PARTIAL (error)
     "6GAN":     SixGANTGA,      # PARTIAL (hangs)
+    "6Gen":     SixGenTGA,      # DONE (linux-only)
 
     "det":      DET,            # TODO (dynamic)
     "6Tree":    SixTreeTGA,     # TODO (dynamic)

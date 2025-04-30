@@ -8,3 +8,4 @@ from .sixgraph import *
 from .sixscan import *
 from .sixtree import *
 from .sixveclm import *
+from .sixgen import *
