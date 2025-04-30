@@ -7,12 +7,13 @@ from utils import *
 
 TGAS = {
     "6Forest":  SixForestTGA,   # DONE
-    "6GCVAE":   SixGcVaeTGA,    # DONE (linux-only)
     "6Graph":   SixGraphTGA,    # DONE
-    "entropy":  EntropyIp,      # PARTIAL (hangs, linux-only)
-    "6VecLM":   SixVecLMTGA,    # PARTIAL (error)
+    "6VecLM":   SixVecLMTGA,    # DONE
     "6GAN":     SixGANTGA,      # PARTIAL (hangs)
+
     "6Gen":     SixGenTGA,      # DONE (linux-only)
+    "6GCVAE":   SixGcVaeTGA,    # DONE (linux-only)
+    "entropy":  EntropyIp,      # PARTIAL (hangs, linux-only)
 
     "det":      DET,            # TODO (dynamic)
     "6Tree":    SixTreeTGA,     # TODO (dynamic)

@@ -1,7 +1,8 @@
 import os
 import subprocess
+import tqdm
 
-from .base import StaticTGA, DynamicTGA
+from .base import StaticTGA, DynamicTGA, add_colans
 
 class EntropyIp(StaticTGA):
     def setup(self) -> None:
@@ -10,20 +11,10 @@ class EntropyIp(StaticTGA):
         self.install_packages(["toposort==1.7", "matplotlib", "scikit-learn", "bnfinder"])
 
     def train(self, seeds: list[str]) -> None:
-        print(f"Writing {len(seeds)} seeds to train directory")
+        # Write seeds
         os.makedirs(self.train_dir, exist_ok=True)
         ip_file = os.path.join(self.train_dir, "seeds.txt")
-        self.write_seeds(seeds, ip_file, colan=False)
-
-        if not hasattr(self, "python") or not os.path.exists(self.python):
-            raise RuntimeError("python is not set up.")
-
-        # the commands from ALL.sh. 'ALL.sh' does:
-        #  cat ip_file | ./a1-segments.py /dev/stdin > $DIR/segments
-        #  cat ip_file | ./a2-mining.py /dev/stdin $DIR/segments > $DIR/analysis
-        #  cat ip_file | ./a3-encode.py /dev/stdin $DIR/analysis | ./a4-bayes-prepare.sh /dev/stdin > $DIR/bnfinput
-        #  ./a5-bayes.sh $DIR/bnfinput > $DIR/cpd
-        #  ./b1-webreport.sh $DIR $DIR/segments $DIR/analysis $DIR/cpd
+        self.write_seeds(seeds, ip_file, exploded=True, colan=False)
 
         # Script paths
         a1 = os.path.join(self.clone_dir, "a1-segments.py")
@@ -34,41 +25,49 @@ class EntropyIp(StaticTGA):
         b1 = os.path.join(self.clone_dir, "b1-webreport.sh")
 
         # segments
-        print("Generating segments")
         seg_path = os.path.join(self.clone_dir, "segments")
-        self.train_cmd(f"cat '{ip_file}' | '{self.python}' '{a1}' /dev/stdin > '{seg_path}'")
+        self.cmd(f"cat '{ip_file}' | '{self.python}' '{a1}' /dev/stdin > '{seg_path}'")
 
         # segment mining
-        print("Mining segments")
-        analysis_path = os.path.join(self.clone_dir, "analysis")
-        self.train_cmd(f"cat '{ip_file}' | '{self.python}' '{a2}' /dev/stdin '{seg_path}' > '{analysis_path}'")
+        analysis_path = os.path.join(self.train_dir, "analysis")
+        self.cmd(f"cat '{ip_file}' | '{self.python}' '{a2}' /dev/stdin '{seg_path}' > '{analysis_path}'")
 
         # bayes model
-        #    cat ip_file | a3-encode.py /dev/stdin analysis | a4-bayes-prepare.sh /dev/stdin > bnfinput
-        print("Bayes model")
         bnfinput_path = os.path.join(self.clone_dir, "bnfinput")
-        self.train_cmd(f"cat '{ip_file}' | '{self.python}' '{a3}' /dev/stdin '{analysis_path}' | '{a4}' /dev/stdin > '{bnfinput_path}'")
+        self.cmd(f"cat '{ip_file}' | '{self.python}' '{a3}' /dev/stdin '{analysis_path}' | '{a4}' /dev/stdin > '{bnfinput_path}'")
 
-        #    ./a5-bayes.sh bnfinput > cpd
-        print("Bayes model 2")
-        cpd_path = os.path.join(self.clone_dir, "cpd")
-        cmd = f"'{a5}' '{bnfinput_path}' > '{cpd_path}'"
-        print(cmd)
-        self.train_cmd(cmd)
-
-        # web report
-        #    ./b1-webreport.sh DIR segments analysis cpd
-        #cmd = (
-        #    f"'{b1}' '{full_output}' '{seg_path}' '{analysis_path}' '{cpd_path}'"
-        #)
-        #subprocess.run(cmd, shell=True, check=True, cwd=repo_path)
-
-        #print(f"Entropy/IP analysis complete. Results stored in: {full_output}")
+        # bayes model
+        model_path = os.path.join(self.train_dir, "model")
+        self.cmd(f"'{a5}' '{bnfinput_path}' > '{model_path}'")
 
     def generate(self, count: int) -> list[str]:
-        """
-        In the pure delegate approach, you might rely on the cloned repo's code
-        for generating addresses. This stub can remain empty or call another script.
-        """
-        print("No direct generation logic here; relying on cloned repo's code for address generation.")
-        return []
+        # declare files
+        model_path = os.path.join(self.train_dir, "model")
+        reduced_path = os.path.join(self.train_dir, "reduced")
+        analysis_path = os.path.join(self.train_dir, "analysis")
+        results_path = os.path.join(self.train_dir, "results")
+
+        unique_ips = set()
+        miniters = max(100, count // 100)
+        with tqdm.tqdm(total=count, desc="Generating unique IPs", miniters=miniters) as pbar:
+            while len(unique_ips) < count:
+                # generate targets
+                self.cmd(f"{self.python} c1-gen.py {model_path} -n {str(count)} > {reduced_path}")
+                self.cmd(f"{self.python} c2-decode.py {reduced_path} {analysis_path} > {results_path}")
+
+                # parse batch
+                with open(results_path, "r") as f:
+                    lines = f.read().split("\n")
+                    for line in lines:
+                        if len(unique_ips) >= count:
+                            break
+
+                        if len(line) != 32:
+                            continue
+
+                        addr = add_colans(line)
+                        if not addr in unique_ips:
+                            unique_ips.add(addr)
+                            pbar.update(1)
+
+        return list(unique_ips)[:count]

@@ -203,3 +203,13 @@ def sample_ip(pat: str) -> str:
     filled = "".join(c if c != "*" and c != "?" else random.choice("0123456789abcdef") for c in pat)
     addr = ipaddress.IPv6Address(int(filled, 16))
     return addr.exploded
+
+def add_colans(s: str) -> str:
+    i = 0
+    addr = ""
+    while i < 32:
+        addr += s[i:i+4]
+        i += 4
+        if i < 32:
+            addr += ":"
+    return addr
