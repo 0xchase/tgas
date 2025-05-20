@@ -7,15 +7,19 @@ Do TGAs even work?
 - Frontends
   - Unified python command-line for all the algorithms
   - Script a scan using the python package
-  - Separate python packages for scanning, tgas, and visualization
+  - Separate python packages for `scanning`, `tgas`, `data downloads`, and `visualization`
   - Fancy user interface for viewing scan progress
+  - Can containerize the run in a docker container if needed using `docker-py`
 - Each TGA is a plugin
   - Use the `@register_tga` decorator to register TGA plugins
   - Provide additional TGA plugins as arguments on the command line
 - Rust v6 scanner
   - Generated python bindings to the Rust API
   - Uses tokio for asynchronous scanning
+  - Integrates with the model context protocol (MCP)
   - Scanner can run as a server with a REST API to remotely trigger/return scan results
+- User interface
+  - 
 
 ## List of IPv6 TGAs
 
