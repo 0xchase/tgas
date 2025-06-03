@@ -1,5 +1,5 @@
-repos/**
-data/**
-run/**
-setup/**
+_old/repos/**
+_old/data/**
+_old/run/**
+_old/setup/**
 **/__pycache__/**

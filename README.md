@@ -2,24 +2,82 @@
 
 Do TGAs even work?
 
+## Prompt
+
+I'm looking to develop a python framework for various IPv6 related tasks.
+
+This framework will have several packages:
+- analyze: for generating analyses and visualizations of scan results
+- datasets: for pulling datasets from sources like the IPv6 hitlist of IPv6 observatory
+- scan: for scanning the ipv6 address space
+- tga: target generation algorithms, which may be static or dynamic
+
+Each package will be written in python, can be installed via pip, and can be imported into a python script that defines a specific scanning and analysis pipeline.
+
+I will also develop two frontends to these packages.
+One will be a CLI interface written in python that has a command associated with each package and support for various flags to provide input data or direct output data. This CLI interface can also be passed a path to a python file that registers plugins for any of the above packages during that run.
+The other will be a flutter application that provides a visual interface frontend to the packages.
+
+In addition to being able to run the TGAs, scans, etc locally the fontends should also be able to deploy them to a remote machine perhaps using docker-py, docker compose, or ansible. It will then communicate with the scan or TGA job over gRPC or using a REST API.
+
+Each package has an associated plugin type or types.
+There will be a parent plugin class that defines the methods it must implement.
+Each class that instantiates a plugin will be a subclass of the parent class and have a decorator like @register_tga, @register_scanner, @register_analyze, @register_dataset, to register it when the python file is loaded.
+
+Provide a full design for this framework.
+
 ## Framework
 
-- Frontends
-  - Unified python command-line for all the algorithms
-  - Script a scan using the python package
-  - Separate python packages for `scanning`, `tgas`, `data downloads`, and `visualization`
-  - Fancy user interface for viewing scan progress
-  - Can containerize the run in a docker container if needed using `docker-py`
-- Each TGA is a plugin
-  - Use the `@register_tga` decorator to register TGA plugins
-  - Provide additional TGA plugins as arguments on the command line
-- Rust v6 scanner
-  - Generated python bindings to the Rust API
-  - Uses tokio for asynchronous scanning
-  - Integrates with the model context protocol (MCP)
-  - Scanner can run as a server with a REST API to remotely trigger/return scan results
-- User interface
-  - 
+- **Command-Line Frontend**
+  - Written in python
+  - Provide additional plugins as arguments to the command line
+  - Can provide arguments to intialize scanner over gRPC
+  - Option to containerize if need be
+  - Can deploy onto remote hosts with docker-compose
+  - **Feedback**: job progress, CPU/memory usage
+- **Flutter Frontend**
+  - Can connect to other packages over gRPC
+  - Can render images created by analyzer plugin
+  - Can queue available data sets
+  - Fancy interface for viewing job progress
+  - Graphic of the whole pipeline: can select plugin(s) to run at each stage
+- **Packages**
+  - `analyze/`
+    - Can output data as table
+    - Can output an image
+      - Visualize dispersion across the address space
+      - Visualize the geolocation of various addresses
+  - `core/`
+    - Core data types
+    - Plugin loading
+  - `datasets/`
+    - Can pull data from a variety of common sources
+  - `scan/`
+    - Invoke over gRPC to support scanning on a remote machine
+    - Wrap zmap in Rust with libzmap-rs
+    - Plugin type for scanners (sub-plugin type for alias detection)
+  - `tga/`
+    - Every TGA is a plugin
+    - Use the `@register_tga` decorator to register TGA plugins
+
+Plugins should be able to check for errors at initialize time
+
+**Metrics**
+
+- aliased addresses (tag true/false, filter list)
+- routed vs non-routed
+- memory/CPU utilization
+- address responded was one probed vs a third-party address
+- yield
+- duplicates
+- overlap w/ training and input data
+- response types (protocol)
+- coverage (across ASes or prefixes or whatever)
+- dispersion of addresses
+
+Papers:
+- Do TGAs generalize to client addresses?
+- Tool paper
 
 ## List of IPv6 TGAs
 
