@@ -11,19 +11,31 @@ import textwrap
 import json
 from pydantic import BaseModel # For serializing actual results
 
+from rich_argparse import RichHelpFormatter
+
 from ipv6kit.core.registry import get_all_plugins
 from ipv6kit.core.plugin import BasePlugin # Needed for isinstance checks
 
 from ipv6kit.analyze.base import AnalyzePlugin
 from ipv6kit.dataset.base import DatasetPlugin
-from ipv6kit.scan.base import ScanPlugin
+from ipv6kit.scan.base import ScanPlugin, AliasDetectionPlugin
 from ipv6kit.tga.base import *
+
+# from cli.formatter import RichHelpFormatter
 
 logger = logging.getLogger("ipv6kit-cli") # Your CLI logger
 
 logger = logging.getLogger(__name__) # Logger for these utils
 LINE_WIDTH = 120
 DEFAULT_INDENT = "  " # Two spaces for indentation
+
+SUPPORTED_PLUGINS = [
+    AnalyzePlugin,
+    DatasetPlugin,
+    ScanPlugin,
+    StaticTGAPlugin,
+    DynamicTGAPlugin,
+]
 
 def setup_cli_logging_fire(verbose: bool = False, log_file_path_str: Optional[str] = None):
     log_level = logging.DEBUG if verbose else logging.INFO
@@ -52,35 +64,41 @@ def main():
 
     all_plugins = get_all_plugins()
 
-    parser = argparse.ArgumentParser(description="A simple example of argparse")
+    parser = argparse.ArgumentParser(
+        prog=sys.argv[0],
+        description="A simple example of argparse",
+        epilog="And this is the epilog, also supporting multiple lines and Rich formatting.",
+        #formatter_class=RichHelpFormatter,
+    )
+
+    # add a plugin argument to the parser
     subparsers = parser.add_subparsers(help='command help', dest='command_parsers')
 
-    for (kind, plugins) in all_plugins.items():
-        # Map command to list of plugins
-        commands = {}
-
+    for base_cls in SUPPORTED_PLUGINS:
         # Collect all the commands for that plugin  kind
-        for (kind, plugin_cls) in plugins.items():
-            for name, member in inspect.getmembers(plugin_cls):
-                if not name.startswith('_') and callable(member):
-                    if name not in commands:
-                        commands[name] = []
-                    commands[name].append(plugin_cls)
-        
-        # Create a parser for each command
-        for command, plugins in commands.items():
-            docstring = command + " help" or f"{command} help"
-            command_parser = subparsers.add_parser(command, help = f"{docstring}")
+        for name, member in inspect.getmembers(base_cls):
+            if not name.startswith('_') and callable(member):
+                # create a subparser for the command
+                command_parser = subparsers.add_parser(name, help=inspect.getdoc(member))
+                spec = inspect.getfullargspec(member)
+                # iterate over all the arguments
+                for arg in spec.args:
+                    if arg == 'self': continue
+                    annotation = spec.annotations[arg]
+                    command_parser.add_argument(f"--{arg}", type=annotation, help=f"Help for {arg}")
 
-            # collect all the plugin annotated names
-            plugin_names = [plugin.__name__ for plugin in plugins]
-
-            # Optional argument to specify a plugin or plugins only from the list of plugins
-            command_parser.add_argument("-p", "--plugin", help="Available plugins: " + ", ".join(plugin_names), action="append")
+                plugin_names = []
+                # add a plugin argument to the command parser
+                for (category, plugins) in all_plugins.items():
+                    for (name, plugin) in plugins.items():
+                        if issubclass(plugin, base_cls):
+                            plugin_names.append(name)
+                
+                command_parser.add_argument("-p", "--plugin", choices=plugin_names, help="Plugin to use for this command")
 
     # Add arguments
     parser.add_argument("-v", "--verbose", help="Increase output verbosity", action="store_true")
-    parser.add_argument("-l", "--log-file", help="Log file", default="ipv6kit.log")
+    parser.add_argument("-l", "--log-file", help="Log file", default="output.log")
 
     # Parse the arguments
     args = parser.parse_args()

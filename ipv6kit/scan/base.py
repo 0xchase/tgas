@@ -24,6 +24,12 @@ class ScanResultSet(BaseModel):
 class ScanPlugin(BasePlugin):
     """scan some addresses"""
 
-    @abstractmethod
+    def scan(self, addrs: AddressSet, **kwargs: Any) -> ScanResultSet:
+        """Scan the given address set."""
+        pass
+
+class AliasDetectionPlugin(BasePlugin):
+    """scan some addresses"""
+
     def scan(self, data: AddressSet, **kwargs: Any) -> ScanResultSet:
         pass

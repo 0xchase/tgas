@@ -6,7 +6,7 @@ from ipv6kit.core.models import AddressSet
 from ipv6kit.scan.base import ScanPlugin
 
 class StaticTGAPlugin(BasePlugin):
-    """Base class for TGAs that train a model then generate targets."""
+    """Static TGA that does not interactively explore the address space."""
 
     def train(self, seed: AddressSet, **kw: Any) -> None:
         pass
@@ -15,11 +15,9 @@ class StaticTGAPlugin(BasePlugin):
         pass
 
 class DynamicTGAPlugin(BasePlugin):
-    """Base class for TGAs that interactively explore the address space."""
-    input_type = AddressSet
-    output_type = AddressSet
+    """Discover new targets by scanning the address space"""
 
-    def run(self,
+    def discover(self,
             seed: AddressSet,
             scanner: ScanPlugin,
             budget: int,
