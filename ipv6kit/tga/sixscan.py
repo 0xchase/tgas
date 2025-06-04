@@ -6,11 +6,12 @@ from ipv6kit.scan.base import ScanPlugin
 
 from typing import Generic, TypeVar, Optional, Callable, Any, Dict
 
-@ipv6kit(kind="tga", name="DET")
-class DetTga(DynamicTGAPlugin):
+@ipv6kit(kind="tga", name="6Scan")
+class SixScanTga(DynamicTGAPlugin):
     def discover(self,
             seed: AddressSet,
             scanner: ScanPlugin,
             budget: int,
             **kw: Any) -> AddressSet:
-        print("Discovering DET")
+        print("Discovering SixScanTga")
+

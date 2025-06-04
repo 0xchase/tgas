@@ -85,15 +85,18 @@ def main():
                 for arg in spec.args:
                     if arg == 'self': continue
                     annotation = spec.annotations[arg]
-                    command_parser.add_argument(f"--{arg}", type=annotation, help=f"Help for {arg}")
 
-                plugin_names = []
-                # add a plugin argument to the command parser
-                for (category, plugins) in all_plugins.items():
-                    for (name, plugin) in plugins.items():
-                        if issubclass(plugin, base_cls):
-                            plugin_names.append(name)
-                
+                    if annotation == None:
+                        command_parser.add_argument(f"--{arg}", type=annotation, help=f"Help for {arg}")
+                    elif inspect.isclass(annotation) and issubclass(annotation, BasePlugin):
+                        plugin_names = [plugin.name for plugin in all_plugins if issubclass(plugin, annotation)]
+                        command_parser.add_argument(f"--{arg}", choices=plugin_names, help=f"Help for {arg}")
+                    elif issubclass(annotation, BaseModel):
+                        command_parser.add_argument(f"--{arg}", type=annotation, help=f"Help for {arg}")
+                    else:
+                        command_parser.add_argument(f"--{arg}", type=annotation, help=f"Help for {arg}")
+
+                plugin_names = [plugin.name for plugin in all_plugins if issubclass(plugin, base_cls)]
                 command_parser.add_argument("-p", "--plugin", choices=plugin_names, help="Plugin to use for this command")
 
     # Add arguments

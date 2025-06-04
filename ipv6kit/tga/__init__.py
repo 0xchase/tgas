@@ -8,6 +8,7 @@ from .sixgan import SixGanTga
 from .sixgcvae import SixGcVaeTga
 from .sixgen import SixGenTga
 from .sixgraph import SixGraphnTga
+from .sixscan import SixScanTga
 from .sixtree import SixTreeTga
 from .sixveclm import SixVecLmTga
 
@@ -20,4 +21,7 @@ __all__ = [
     "SixGcVaeTga",
     "SixGenTga",
     "SixGraphnTga",
+    "SixScanTga",
+    "SixTreeTga",
+    "SixVecLmTga",
 ]

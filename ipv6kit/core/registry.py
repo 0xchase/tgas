@@ -1,7 +1,7 @@
 # ipv6kit/core/registry.py
 import logging
 from collections import defaultdict
-from typing import Dict, Type, Callable, Any, Optional
+from typing import Dict, Type, Callable, Any, Optional, List
 
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
@@ -43,7 +43,11 @@ def ipv6kit(kind: str, name: Optional[str] = None) -> Callable[[Type["BasePlugin
         return cls
     return decorator
 
-def get_all_plugins() -> Dict[str, Dict[str, Type["BasePlugin"]]]:
-    return {k: dict(v) for k, v in PLUGINS.items()}
+def get_all_plugins() -> List[Type["BasePlugin"]]:
+    all_plugins = []
+    for (kind, plugins) in PLUGINS.items():
+        for (name, plugin) in plugins.items():
+            all_plugins.append(plugin)
+    return all_plugins
 
 # Other accessors like get_plugin, get_all_plugins_by_kind can remain if needed internally.
