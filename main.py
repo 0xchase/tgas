@@ -19,24 +19,7 @@ from ipv6kit.dataset.base import DatasetPlugin
 from ipv6kit.scan.base import ScanPlugin
 from ipv6kit.tga.base import *
 
-# --- Start of sys.path modification (as before) ---
-script_file_path = pathlib.Path(__file__).resolve()
-ipv6kit_package_dir = script_file_path.parent
-project_root_dir = ipv6kit_package_dir.parent
-if str(project_root_dir) not in sys.path:
-    sys.path.insert(0, str(project_root_dir))
-# --- End of sys.path modification ---
-
 logger = logging.getLogger("ipv6kit-cli") # Your CLI logger
-
-import inspect
-import textwrap
-import logging
-from typing import Any, List, Dict, Optional, Callable
-from dataclasses import dataclass, field
-
-# Assuming BasePlugin is accessible for type checking if needed, e.g.,
-# from ipv6kit.core.plugin import BasePlugin
 
 logger = logging.getLogger(__name__) # Logger for these utils
 LINE_WIDTH = 120
@@ -78,8 +61,6 @@ def main():
 
         # Collect all the commands for that plugin  kind
         for (kind, plugin_cls) in plugins.items():
-            print(kind, plugin_cls)
-
             for name, member in inspect.getmembers(plugin_cls):
                 if not name.startswith('_') and callable(member):
                     if name not in commands:

@@ -5,8 +5,8 @@ from ipv6kit.core.registry import ipv6kit
 
 from typing import Generic, TypeVar, Optional, Callable, Any, Dict
 
-@ipv6kit(kind="tga", name="6GAN")
-class SixGanTga(StaticTGAPlugin, int):
+@ipv6kit(kind="tga", name="6GCVAE")
+class SixGcVaeTga(StaticTGAPlugin):
     def train(self, seed: AddressSet, **kw: Any) -> None:
         print("Training SixGanTga")
 
