@@ -13,11 +13,11 @@ class AnalysisReport(BaseModel):
     details: Dict[str, Any]
     source_scan_results_count: int
 
-class AnalyzerPlugin(BasePlugin[ScanResultSet, AnalysisReport]):
-    """Base class for plugins that analyze scan results."""
-    input_type = ScanResultSet
-    output_type = AnalysisReport
+class AnalyzePlugin(BasePlugin):
+    """Analyze some results"""
 
     @abstractmethod
-    def run(self, data: ScanResultSet, **kwargs: Any) -> AnalysisReport:
+    def analyze(self, data: ScanResultSet, **kwargs: Any) -> AnalysisReport:
         pass
+
+

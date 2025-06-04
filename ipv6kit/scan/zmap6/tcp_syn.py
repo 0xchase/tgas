@@ -6,8 +6,12 @@ from pydantic import validator # For port validation
 from ipv6kit.core.registry import ipv6kit
 from .base import BaseZmap6Scanner # Relative import
 
-@ipv6kit(kind="scanner", name="Zmap6TCPSYNScanner")
+@ipv6kit(kind="scan", name="zmap6_tcp_syn")
 class Zmap6TCPSYNScanner(BaseZmap6Scanner):
+    """
+    zmap6 plugin for performing a TCP SYN scan.
+    """
+
     name = "Zmap6TCPSYNScanner" # Concrete name
     version = "0.1.0"
     description = "Performs a TCP SYN scan for a specific port using zmap6."
@@ -36,8 +40,7 @@ class Zmap6TCPSYNScanner(BaseZmap6Scanner):
         )
         self.port = port
 
-    @validator('port')
-    def port_must_be_valid(cls, v: int) -> int:
+    def _port_must_be_valid(cls, v: int) -> int:
         if not (1 <= v <= 65535):
             raise ValueError("Port must be between 1 and 65535")
         return v

@@ -10,10 +10,9 @@ from typing import List, Optional, Any, Dict
 
 # Assuming 'ipv6kit' is the top-level package visible in PYTHONPATH
 from ipv6kit.core.models import AddressSet
-from ipv6kit.scan.base import ScannerPlugin, ScanResult, ScanResultSet # ScannerPlugin is from scan.base
-from ipv6kit.tga.base import ProgressCallback # ProgressCallback is currently in tga.base
+from ipv6kit.scan.base import ScanPlugin, ScanResult, ScanResultSet # ScannerPlugin is from scan.base
 
-class BaseZmap6Scanner(ScannerPlugin, ABC):
+class BaseZmap6Scanner(ScanPlugin, ABC):
     """
     Abstract base class for ScannerPlugins that use zmap6.
     It handles common tasks like target file creation, zmap6 execution,
@@ -31,7 +30,7 @@ class BaseZmap6Scanner(ScannerPlugin, ABC):
     sender_threads: Optional[int]
     probes: Optional[int]
     cooldown_time: Optional[int]
-    extra_args: List[str]
+    #extra_args: List[str]
 
     _ZMAP6_EXPECTED_OUTPUT_FIELDS = "saddr,classification,success,repeat,cooldown"
 
@@ -43,10 +42,10 @@ class BaseZmap6Scanner(ScannerPlugin, ABC):
         sender_threads: Optional[int] = 1,
         probes: Optional[int] = 1,
         cooldown_time: Optional[int] = None,
-        extra_args: Optional[List[str]] = None,
+        #extra_args: Optional[List[str]] = None,
         # Add progress_bars_enabled to pass to super if ScannerPlugin expects it
         progress_bars_enabled: bool = False,
-        **kwargs: Any # Catches other args for super or future use
+        **kwargs: Any, # Catches other args for super or future use
     ):
         # Pass progress_bars_enabled to ScannerPlugin (which inherits from BasePlugin)
         super().__init__(progress_bars_enabled=progress_bars_enabled, **kwargs)
@@ -56,7 +55,7 @@ class BaseZmap6Scanner(ScannerPlugin, ABC):
         self.sender_threads = sender_threads
         self.probes = probes
         self.cooldown_time = cooldown_time
-        self.extra_args = extra_args or []
+        #self.extra_args = extra_args or []
 
     @abstractmethod
     def _build_specific_zmap6_args(self) -> List[str]:
@@ -95,7 +94,7 @@ class BaseZmap6Scanner(ScannerPlugin, ABC):
         concrete_plugin_name = getattr(self, 'name', 'BaseZmap6Scanner').lower().replace("scanner", "")
         return f"{concrete_plugin_name}_{self._get_scan_protocol()}_{self._get_scanned_port_or_type()}"
 
-    def run(self, data: AddressSet, *, progress_cb: Optional[ProgressCallback] = None, **kwargs: Any) -> ScanResultSet:
+    def scan(self, data: AddressSet, **kwargs: Any) -> ScanResultSet:
         plugin_display_name = getattr(self, 'name', 'Zmap6Scan') # Use concrete plugin's name
 
         if not data.addresses:
@@ -144,7 +143,8 @@ class BaseZmap6Scanner(ScannerPlugin, ABC):
                     "-f", self._ZMAP6_EXPECTED_OUTPUT_FIELDS,
                     "--output-filter=" 
                 ])
-                cmd.extend(self.extra_args)
+                
+                #cmd.extend(self.extra_args)
 
                 self.info(f"Executing zmap6 command: {' '.join(cmd)}")
                 if progress_cb: progress_cb(f"{plugin_display_name}_start", {"command": " ".join(cmd)})

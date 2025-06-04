@@ -21,11 +21,9 @@ class ScanResultSet(BaseModel):
     results: List[ScanResult] = Field(default_factory=list)
     scan_name: Optional[str] = None
 
-class ScannerPlugin(BasePlugin[AddressSet, ScanResultSet]):
-    """Base class for plugins that scan a set of addresses."""
-    input_type = AddressSet
-    output_type = ScanResultSet
+class ScanPlugin(BasePlugin):
+    """scan some addresses"""
 
     @abstractmethod
-    def run(self, data: AddressSet, **kwargs: Any) -> ScanResultSet:
+    def scan(self, data: AddressSet, **kwargs: Any) -> ScanResultSet:
         pass

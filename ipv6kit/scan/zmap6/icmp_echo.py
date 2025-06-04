@@ -5,13 +5,17 @@ from typing import List, Optional, Any, Dict
 from ipv6kit.core.registry import ipv6kit
 from .base import BaseZmap6Scanner # Relative import
 
-@ipv6kit(kind="scanner", name="Zmap6ICMPv6EchoScanner")
+ICMPV6_ECHO_REQUEST_TYPE = 128
+
+@ipv6kit(kind="scan", name="zmap6_icmp_echo")
 class Zmap6ICMPv6EchoScanner(BaseZmap6Scanner):
+    """
+    zmap6 plugin for performing an ICMPv6 Echo Request (ping) scan.
+    """
+
     name = "Zmap6ICMPv6EchoScanner" # Concrete name
     version = "0.1.0"
     description = "Performs an ICMPv6 Echo Request (ping) scan using zmap6."
-
-    ICMPV6_ECHO_REQUEST_TYPE = 128
 
     def __init__(
         self,
@@ -44,7 +48,7 @@ class Zmap6ICMPv6EchoScanner(BaseZmap6Scanner):
         return "icmpv6"
 
     def _get_scanned_port_or_type(self) -> int:
-        return self.ICMPV6_ECHO_REQUEST_TYPE
+        return ICMPV6_ECHO_REQUEST_TYPE
 
     def _map_zmap_status(self, row: Dict[str, str]) -> str:
         success = row.get("success", "0").strip()
