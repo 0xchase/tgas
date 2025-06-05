@@ -4,6 +4,9 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 
+use ipnet::{IpNet, Ipv4Net, Ipv6Net};
+
+
 pub async fn test_scan() {
     let addrs = vec![
         IpAddr::V4(Ipv4Addr::new(192, 168, 1, 1)),
@@ -19,12 +22,16 @@ pub async fn test_scan() {
         .map(|i| IpAddr::V4(Ipv4Addr::new(192, 168, 1, i)))
         .collect::<Vec<IpAddr>>();
 
+    let net4: IpNet = "10.1.1.0/24".parse().unwrap();
+    // let net6: Ipv6Net = "fd00::/24".parse().unwrap();
+    // println!("net4: {:?}", net4.hosts().count());
+    // println!("net6: {:?}", net6.hosts().nth(123487234));
+
     let start = Instant::now();
     let scanner = Scanner::default();
-    let mut results = scanner.scan(addrs.into_iter());
+    let mut results = scanner.scan(net4.hosts().take(10));
 
     println!("Starting scan");
-
     while let Some(result) = results.next().await {
         println!("Recieved {} after {:?}", result.addr, start.elapsed());
     }

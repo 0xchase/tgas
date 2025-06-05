@@ -8,6 +8,7 @@ Scan result:
 - address set entropy
 - yield
 - coverage (across addrs, prefixes, etc)
+- classify addresses in some way
 
 TGA results
 - overlap w/training or input data
@@ -31,6 +32,7 @@ Core Modules
   - tables
   - graphs
   - visualizations
+  - classify addresses
 - **scanners**: `scan`
   - support as many zmap options as possible
   - live detection

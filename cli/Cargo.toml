@@ -1,0 +1,15 @@
+[package]
+name = "ipv6kit"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+clap = { version = "4.5.39", features = ["derive"] }
+# pyo3 = "0.25.0"
+tokio = { version = "1.45.1", features = ["full"] }
+futures = "0.3"
+async-trait = "0.1"
+rand = "0.8"
+scan = { path = "../scan" }
+ipnet = "2.9"
+hickory-resolver = "0.24"
