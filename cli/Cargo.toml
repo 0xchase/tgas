@@ -15,3 +15,4 @@ hickory-resolver = "0.24"
 
 scan = { path = "../scan" }
 tga = { path = "../tga" }
+analyze = { path = "../analyze" }

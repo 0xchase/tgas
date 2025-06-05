@@ -1,6 +1,7 @@
 mod entropy_ip;
 
 use std::net::Ipv6Addr;
+use std::collections::HashSet;
 
 use entropy_ip::EntropyIpTga;
 
@@ -39,7 +40,7 @@ pub trait IpNetModel<const C: usize> {
 }
 
 
-pub fn test(count: usize) {
+pub fn generate(count: usize, unique: bool) {
     // Sample IPv6 addresses inspired by patterns discussed in the paper.
     // Some have structured prefixes, some have similar interface IDs.
     let seed_ips: Vec<[u8; 16]> = vec![
@@ -56,12 +57,32 @@ pub fn test(count: usize) {
     ];
 
     let tga = EntropyIpTga;
+
+    println!("Building model from {} seed addresses...", seed_ips.len());
     let model = tga.build(seed_ips);
 
+    // For unique generation, we'll keep track of what we've generated
+    let mut generated = HashSet::new();
+    let mut i = 0;
+    let mut attempts = 0;
+    const MAX_ATTEMPTS: usize = 1_000_000; // Prevent infinite loops
+
     // Generate new candidate addresses from the model.
-    for i in 0..count {
+    while i < count {
         let generated_bytes = model.generate();
         let generated_ip = Ipv6Addr::from(generated_bytes);
-        println!("  {}: {}", i + 1, generated_ip);
+
+        if !unique || generated.insert(generated_ip) {
+            println!("{}", generated_ip);
+            i += 1;
+            attempts = 0;
+        } else {
+            attempts += 1;
+            if attempts >= MAX_ATTEMPTS {
+                eprintln!("Warning: Could only generate {}/{} unique addresses after {} attempts", 
+                    i, count, MAX_ATTEMPTS);
+                break;
+            }
+        }
     }
 }

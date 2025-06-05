@@ -1,7 +1,7 @@
 [workspace]
 resolver = "3"
-members = [
-	#"analyze",
+members = [ "analyze",
+	"analyze",
 	"cli",
 	"scan",
 	"tga"

@@ -1,6 +1,8 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 use std::net::{IpAddr, ToSocketAddrs};
+use std::io::BufReader;
+use std::fs::File;
 use ipnet::IpNet;
 use hickory_resolver::AsyncResolver;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
@@ -45,6 +47,10 @@ enum Commands {
         /// Number of addresses to generate
         #[arg(short = 'n', long, default_value = "10")]
         count: usize,
+
+        /// Ensure generated addresses are unique
+        #[arg(short = 'u', long)]
+        unique: bool,
     },
     /// Train the TGA
     Train,
@@ -120,6 +126,12 @@ enum Commands {
     },
     /// Discover new targets by scanning the address space
     Discover,
+    /// Analyze IPv6 addresses from a file
+    Analyze {
+        /// Path to file containing IPv6 addresses (one per line)
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+    },
 }
 
 #[derive(Debug)]
@@ -198,10 +210,9 @@ async fn main() {
     // println!("Output will be written to: {}", cli.output_file);
 
     match &cli.command {
-        Commands::Generate { count } => {
-            println!("Generating {} addresses...", count);
-            // TODO: implement proper model building and generation
-            tga::test(*count);
+        Commands::Generate { count, unique } => {
+            println!("Generating {} addresses{}", count, if *unique { " (unique)" } else { "" });
+            tga::generate(*count, *unique);
         }
         Commands::Train => {
             println!("Running 'train' command");
@@ -261,6 +272,59 @@ async fn main() {
         Commands::Discover => {
             println!("Running 'discover' command");
             // TODO: implement discover logic
+        }
+        Commands::Analyze { file } => {
+            if !file.exists() {
+                eprintln!("Error: File not found: {}", file.display());
+                std::process::exit(1);
+            }
+            
+            let file = match File::open(file) {
+                Ok(f) => f,
+                Err(e) => {
+                    eprintln!("Error opening file: {}", e);
+                    std::process::exit(1);
+                }
+            };
+            
+            let reader = BufReader::new(file);
+            match analyze::analyze(reader) {
+                Ok(stats) => {
+                    println!("\nAddress Statistics:");
+                    println!("Total addresses: {}", stats.total_count);
+                    println!("Unique addresses: {}", stats.unique_count);
+                    println!("Duplicate addresses: {}", stats.duplicate_count);
+                    println!("Total entropy: {:.4} bits", stats.total_entropy);
+                    println!("\nDispersion Metrics:");
+                    println!("Average distance (log2): {:.2} bits", stats.avg_distance);
+                    println!("Maximum distance: 2^{:.2} ({})", 
+                        (stats.max_distance as f64).log2(),
+                        stats.max_distance);
+                    println!("Coverage ratio: {:.2e}", stats.coverage_ratio);
+                    
+                    // Interpret the results
+                    println!("\nInterpretation:");
+                    if stats.coverage_ratio < 1e-30 {
+                        println!("The addresses are very sparsely distributed across the address space.");
+                    } else if stats.coverage_ratio < 1e-20 {
+                        println!("The addresses are moderately distributed across the address space.");
+                    } else {
+                        println!("The addresses are relatively densely packed within their range.");
+                    }
+                    
+                    if stats.avg_distance > 64.0 {
+                        println!("Large gaps exist between addresses (average gap > 2^64).");
+                    } else if stats.avg_distance > 32.0 {
+                        println!("Medium-sized gaps exist between addresses (average gap > 2^32).");
+                    } else {
+                        println!("Addresses are relatively close to each other.");
+                    }
+                }
+                Err(e) => {
+                    eprintln!("Error analyzing file: {}", e);
+                    std::process::exit(1);
+                }
+            }
         }
     }
 }
