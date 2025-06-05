@@ -1,5 +1,13 @@
 # Notes
 
+## Papers
+
+- **Paper 1**: Tool paper
+- **Paper 2**: TGAs don't generalize to clients
+- **Paper 3**: Vulnerability identification scan but for IPv6
+- **Paper 4**: IPFS for address discovery (cache content that indicates vulnerability)
+- **Paper 5**: Solve the alias detection issue
+
 ## Ideas
 
 Scan result:
@@ -27,18 +35,23 @@ System metrics:
 Core Modules
 
 - **analyze**: `analyze`, `visualize`
+  - by default it will identify the file and suggest arguments/flags for the user to pass
   - system: job progress, CPU and memory usage
   - metrics
   - tables
   - graphs
   - visualizations
   - classify addresses
+- **measurements**: `measure`
+  - measure the bandwidth of an interface
 - **scanners**: `scan`
+  - support stateful, stateless, PF_RING accelerated stateless, and application layer
   - support as many zmap options as possible
   - live detection
   - alias detection
   - routed detection
   - response from probed address or third-party
+  - `--watch` flag can be passed a list of analysis plugins
   - *feedback*: live update any analysis
 - **tgas**: `generate`, `train`, `run`
   - some in Rust
@@ -51,6 +64,8 @@ Core Modules
 - **server**: `serve`
   - starts tonic `grpc` server
   - bi-directional asynchronous streaming
+  - `--scan` to host a scanning server
+  - `--bandwidth` to host a bandwidth test server
 
 ## CLI Frontend
 

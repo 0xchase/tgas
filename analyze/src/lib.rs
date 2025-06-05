@@ -118,14 +118,3 @@ fn calculate_dispersion_metrics(addresses: &HashMap<Ipv6Addr, usize>) -> (f64, u
 
     (avg_distance, max_distance, coverage_ratio)
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn it_works() {
-        let result = add(2, 2);
-        assert_eq!(result, 4);
-    }
-}
