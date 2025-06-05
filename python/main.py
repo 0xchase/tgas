@@ -1,5 +1,3 @@
-# /home/crkanip/ipv6kit/main.py
-# (initial imports: sys, pathlib, logging, fire, argparse, typing, etc. remain the same)
 import sys
 import pathlib
 import logging
@@ -7,35 +5,14 @@ import logging
 import argparse # For pre-parsing global flags
 from typing import Optional, List, Any, Dict, Type, Generic # For type hints
 import inspect
-import textwrap
-import json
 from pydantic import BaseModel # For serializing actual results
 
-from rich_argparse import RichHelpFormatter
+#from rich_argparse import RichHelpFormatter
 
 from ipv6kit.core.registry import get_all_plugins
 from ipv6kit.core.plugin import BasePlugin # Needed for isinstance checks
 
-from ipv6kit.analyze.base import AnalyzePlugin
-from ipv6kit.dataset.base import DatasetPlugin
-from ipv6kit.scan.base import ScanPlugin, AliasDetectionPlugin
-from ipv6kit.tga.base import *
-
-# from cli.formatter import RichHelpFormatter
-
-logger = logging.getLogger("ipv6kit-cli") # Your CLI logger
-
 logger = logging.getLogger(__name__) # Logger for these utils
-LINE_WIDTH = 120
-DEFAULT_INDENT = "  " # Two spaces for indentation
-
-SUPPORTED_PLUGINS = [
-    AnalyzePlugin,
-    DatasetPlugin,
-    ScanPlugin,
-    StaticTGAPlugin,
-    DynamicTGAPlugin,
-]
 
 def setup_cli_logging_fire(verbose: bool = False, log_file_path_str: Optional[str] = None):
     log_level = logging.DEBUG if verbose else logging.INFO
@@ -60,23 +37,31 @@ def main():
     import ipv6kit.analyze
     import ipv6kit.dataset
     import ipv6kit.scan
-    # import ipv6kit.tga
+    import ipv6kit.tga
 
     all_plugins = get_all_plugins()
+
+    # Get all base classes
+    base_classes = set()
+    for plugin in all_plugins:
+        if issubclass(plugin, BasePlugin):
+            hierarchy = inspect.getmro(plugin)
+            base_class = hierarchy[hierarchy.index(BasePlugin) - 1]
+            base_classes.add(base_class)
 
     parser = argparse.ArgumentParser(
         prog=sys.argv[0],
         description="A simple example of argparse",
-        epilog="And this is the epilog, also supporting multiple lines and Rich formatting.",
+        #epilog="And this is the epilog, also supporting multiple lines and Rich formatting.",
         #formatter_class=RichHelpFormatter,
     )
 
     # add a plugin argument to the parser
     subparsers = parser.add_subparsers(help='command help', dest='command_parsers')
 
-    for base_cls in SUPPORTED_PLUGINS:
+    for base_cls in base_classes:
         # Collect all the commands for that plugin  kind
-        for name, member in inspect.getmembers(base_cls):
+        for name, member in inspect.getmembers_static(base_cls):
             if not name.startswith('_') and callable(member):
                 # create a subparser for the command
                 command_parser = subparsers.add_parser(name, help=inspect.getdoc(member))

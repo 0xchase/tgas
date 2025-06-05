@@ -12,4 +12,5 @@ class DatasetPlugin(BasePlugin):
 
     @abstractmethod
     def download(self, data: None = None, **kwargs: Any) -> AddressSet:
+        """download a dataset"""
         pass

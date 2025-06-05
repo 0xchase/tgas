@@ -9,17 +9,19 @@ class StaticTGAPlugin(BasePlugin):
     """Static TGA that does not interactively explore the address space."""
 
     def train(self, seed: AddressSet, **kw: Any) -> None:
+        """Train the TGA"""
         pass
 
     def generate(self, model: int, num_targets: int, **kw: Any) -> AddressSet:
+        """Generate a set of targets"""
         pass
 
 class DynamicTGAPlugin(BasePlugin):
-    """Discover new targets by scanning the address space"""
-
     def discover(self,
             seed: AddressSet,
             scanner: ScanPlugin,
             budget: int,
             **kw: Any) -> AddressSet:
+        """Discover new targets by scanning the address space"""
+
         pass

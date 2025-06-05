@@ -1,5 +1,2 @@
-_old/repos/**
-_old/data/**
-_old/run/**
-_old/setup/**
+target/
 **/__pycache__/**

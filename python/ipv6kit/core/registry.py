@@ -34,8 +34,8 @@ def ipv6kit(kind: str, name: Optional[str] = None) -> Callable[[Type["BasePlugin
 
         PLUGINS[kind][plugin_name_to_register] = cls
 
-        if not hasattr(cls, 'name') or getattr(cls, 'name', None) is None:
-            setattr(cls, 'name', plugin_name_to_register)
+        setattr(cls, 'name', plugin_name_to_register)
+        
         if not hasattr(cls, 'version') or getattr(cls, 'version', None) is None:
             setattr(cls, 'version', "0.1.0")
 
