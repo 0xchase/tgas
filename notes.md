@@ -36,14 +36,21 @@ Core Modules
 
 - **analyze**: `analyze`, `visualize`
   - by default it will identify the file and suggest arguments/flags for the user to pass
-  - system: job progress, CPU and memory usage
+  - **scan output**: parse any zmap or ipv6kit output
+  - **tga model**: parse a tga model file, identify the tga, load the tga, print supported information about it
+  - **address list**: parse an address list
   - metrics
   - tables
   - graphs
+    - graph any property against another property
+      - pre-calculate some properties to make them available
+      - use property types (category/enum, float, int, etc) to decide graph format
+      - line graph, bar chart, pie chart, scatter plot, heatmap
   - visualizations
   - classify addresses
 - **measurements**: `measure`
   - measure the bandwidth of an interface
+  - measure cpu/memory usage
 - **scanners**: `scan`
   - support stateful, stateless, PF_RING accelerated stateless, and application layer
   - support as many zmap options as possible
@@ -51,7 +58,8 @@ Core Modules
   - alias detection
   - routed detection
   - response from probed address or third-party
-  - `--watch` flag can be passed a list of analysis plugins
+  - `--analysis` flag can be passed a list of analysis plugins
+  - `--watch` and `--feedback` can show other things
   - *feedback*: live update any analysis
 - **tgas**: `generate`, `train`, `run`
   - some in Rust
@@ -64,8 +72,8 @@ Core Modules
 - **server**: `serve`
   - starts tonic `grpc` server
   - bi-directional asynchronous streaming
-  - `--scan` to host a scanning server
-  - `--bandwidth` to host a bandwidth test server
+  - `scanner` to host a scanning server
+  - `bandwidth` to host a bandwidth test server
 
 ## CLI Frontend
 
