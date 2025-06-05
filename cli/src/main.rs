@@ -41,7 +41,11 @@ enum ProbeModule {
 #[derive(Subcommand)]
 enum Commands {
     /// Generate a set of targets
-    Generate,
+    Generate {
+        /// Number of addresses to generate
+        #[arg(short = 'n', long, default_value = "10")]
+        count: usize,
+    },
     /// Train the TGA
     Train,
     /// Scan the given address set
@@ -194,9 +198,10 @@ async fn main() {
     // println!("Output will be written to: {}", cli.output_file);
 
     match &cli.command {
-        Commands::Generate => {
-            println!("Running 'generate' command");
-            // TODO: implement generate logic
+        Commands::Generate { count } => {
+            println!("Generating {} addresses...", count);
+            // TODO: implement proper model building and generation
+            tga::test(*count);
         }
         Commands::Train => {
             println!("Running 'train' command");
@@ -267,15 +272,3 @@ trait Job {
     // Status of the asynchronously running job
     fn status() -> String;
 }
-
-// generates new targets given a seed
-/*
-Don't use static and dynamic TGAs
-- Pure algorithmic methods are a simple TGA type
-- Training a model may output a TGA
-- Dynamic TGAs transform a TGA into another TGA
-*/
-trait TGA {}
-
-// May analyze or visualize a scan result
-trait Analyzer {}
