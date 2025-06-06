@@ -1,7 +1,5 @@
 use std::io::{BufRead, Error as IoError};
 use std::net::{IpAddr, Ipv6Addr};
-use std::collections::HashMap;
-use std::str::FromStr;
 use std::fmt::Display;
 use std::time::{Duration, Instant};
 use indicatif::{ProgressBar, ProgressStyle};
