@@ -227,6 +227,30 @@ impl Target {
     }
 }
 
+fn analyze_file(
+    file_path: &PathBuf,
+    analysis_type: AnalysisType,
+    subnet_options: Option<analyze::SubnetOptions>,
+) -> Result<(), String> {
+    let file_size = file_path
+        .metadata()
+        .map(|m| m.len())
+        .map_err(|e| format!("Failed to get file metadata: {}", e))?;
+    
+    let file = File::open(file_path)
+        .map_err(|e| format!("Failed to open file: {}", e))?;
+    
+    let reader = BufReader::with_capacity(1024, file);
+    
+    match analyze::analyze(reader, analysis_type, subnet_options, file_size) {
+        Ok(results) => {
+            print_analysis_result(&*results);
+            Ok(())
+        },
+        Err(e) => Err(format!("Analysis failed: {}", e)),
+    }
+}
+
 #[tokio::main]
 async fn main() {
     let cli = Cli::parse();
@@ -310,43 +334,28 @@ async fn main() {
             // TODO: implement discover logic
         }
         Commands::Analyze { command } => {
-            match command {
+            let result = match command {
                 AnalysisCommand::Counts { file } => {
-                    let file = File::open(file).expect("Failed to open file");
-                    let reader = BufReader::new(file);
-                    match analyze::analyze(reader, AnalysisType::Counts, None) {
-                        Ok(results) => print_analysis_result(&*results),
-                        Err(e) => eprintln!("Analysis failed: {}", e),
-                    }
+                    analyze_file(file, AnalysisType::Counts, None)
                 },
                 AnalysisCommand::Dispersion { file } => {
-                    let file = File::open(file).expect("Failed to open file");
-                    let reader = BufReader::new(file);
-                    match analyze::analyze(reader, AnalysisType::Dispersion, None) {
-                        Ok(results) => print_analysis_result(&*results),
-                        Err(e) => eprintln!("Analysis failed: {}", e),
-                    }
+                    analyze_file(file, AnalysisType::Dispersion, None)
                 },
                 AnalysisCommand::Entropy { file } => {
-                    let file = File::open(file).expect("Failed to open file");
-                    let reader = BufReader::new(file);
-                    match analyze::analyze(reader, AnalysisType::Entropy, None) {
-                        Ok(results) => print_analysis_result(&*results),
-                        Err(e) => eprintln!("Analysis failed: {}", e),
-                    }
+                    analyze_file(file, AnalysisType::Entropy, None)
                 },
                 AnalysisCommand::Subnets { file, max_subnets, prefix_length } => {
-                    let file = File::open(file).expect("Failed to open file");
-                    let reader = BufReader::new(file);
                     let subnet_options = Some(analyze::SubnetOptions {
                         max_subnets: *max_subnets,
                         prefix_length: *prefix_length,
                     });
-                    match analyze::analyze(reader, AnalysisType::Subnets, subnet_options) {
-                        Ok(results) => print_analysis_result(&*results),
-                        Err(e) => eprintln!("Analysis failed: {}", e),
-                    }
+                    analyze_file(file, AnalysisType::Subnets, subnet_options)
                 },
+            };
+
+            if let Err(e) = result {
+                eprintln!("{}", e);
+                std::process::exit(1);
             }
         }
     }

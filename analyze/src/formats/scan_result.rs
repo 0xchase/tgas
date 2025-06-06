@@ -11,6 +11,7 @@ pub struct ScanResultRow {
 pub struct ScanResultIterator<R> {
     reader: R,
     line_buffer: String,
+    bytes_read: u64,
     saddr_idx: usize,
     type_idx: Option<usize>,
     header_read: bool,
@@ -20,7 +21,8 @@ impl<R: BufRead> ScanResultIterator<R> {
     pub fn new(reader: R) -> Result<Self, IoError> {
         let mut iter = Self {
             reader,
-            line_buffer: String::with_capacity(100), // Typical CSV line length
+            line_buffer: String::new(),
+            bytes_read: 0,
             saddr_idx: 0,
             type_idx: None,
             header_read: false,
@@ -48,6 +50,12 @@ impl<R: BufRead> ScanResultIterator<R> {
             Err(e) => Err(e),
         }
     }
+
+    /// Returns the number of bytes read from the input so far
+    #[inline]
+    pub fn bytes_read(&self) -> u64 {
+        self.bytes_read
+    }
 }
 
 impl<R: BufRead> Iterator for ScanResultIterator<R> {
@@ -62,7 +70,8 @@ impl<R: BufRead> Iterator for ScanResultIterator<R> {
             self.line_buffer.clear();
             match self.reader.read_line(&mut self.line_buffer) {
                 Ok(0) => return None, // EOF
-                Ok(_) => {
+                Ok(n) => {
+                    self.bytes_read += n as u64;
                     let line = self.line_buffer.trim();
                     if line.is_empty() || line.starts_with('#') {
                         continue; // Skip empty lines and comments

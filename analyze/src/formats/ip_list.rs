@@ -7,6 +7,7 @@ const INITIAL_BUFFER_SIZE: usize = 48; // Slightly larger than max IPv6 string (
 pub struct IpListIterator<R> {
     reader: R,
     line_buffer: String,
+    bytes_read: u64,
     #[allow(dead_code)]
     total_lines: usize,
 }
@@ -17,6 +18,7 @@ impl<R: BufRead> IpListIterator<R> {
         Self {
             reader,
             line_buffer: String::with_capacity(INITIAL_BUFFER_SIZE),
+            bytes_read: 0,
             total_lines: 0,
         }
     }
@@ -26,8 +28,15 @@ impl<R: BufRead> IpListIterator<R> {
         Self {
             reader,
             line_buffer: String::with_capacity(capacity.max(INITIAL_BUFFER_SIZE)),
+            bytes_read: 0,
             total_lines: 0,
         }
+    }
+
+    /// Returns the number of bytes read from the input so far
+    #[inline]
+    pub fn bytes_read(&self) -> u64 {
+        self.bytes_read
     }
 }
 
@@ -43,8 +52,9 @@ impl<R: BufRead> Iterator for IpListIterator<R> {
             // Read next line
             match self.reader.read_line(&mut self.line_buffer) {
                 Ok(0) => return None, // EOF
-                Ok(_) => {
+                Ok(n) => {
                     self.total_lines += 1;
+                    self.bytes_read += n as u64;
                     
                     // Fast path: check if empty or comment without allocating a new string
                     let line = self.line_buffer.as_bytes();
