@@ -4,6 +4,7 @@
 
 - **Paper 1**: Tool paper
 - **Paper 2**: TGAs don't generalize to clients
+ - Assess the performance/accuracy tradeoff
 - **Paper 3**: Vulnerability identification scan but for IPv6
 - **Paper 4**: IPFS for address discovery (cache content that indicates vulnerability)
 - **Paper 5**: Solve the alias detection issue
