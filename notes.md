@@ -52,9 +52,15 @@ Core Modules
 - **measurements**: `measure`
   - measure the bandwidth of an interface
   - measure cpu/memory usage
+- **geolocation**: `locate`
+  - locate localhost/self using various techniques
+  - round-trip-time triangulation (pass three scans to `analyze`)
+  - like `ip2trace` combine traceroute with offline database lookup for each hop
+  - using BGP and WHOIS data to find the registered owner
 - **scanners**: `scan`
   - support stateful, stateless, PF_RING accelerated stateless, and application layer
   - support as many zmap options as possible
+  - traceroute
   - live detection
   - alias detection
   - routed detection

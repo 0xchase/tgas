@@ -11,6 +11,7 @@ pub struct AddressStats {
     pub avg_distance: f64,
     pub max_distance: u128,
     pub coverage_ratio: f64,
+    pub subnet_counts: Option<HashMap<String, usize>>,
 }
 
 #[derive(Debug)]
@@ -23,6 +24,7 @@ pub struct CsvAddressStats {
     pub max_distance: u128,
     pub coverage_ratio: f64,
     pub active_response_ratio: f64,
+    pub subnet_counts: Option<HashMap<String, usize>>,
 }
 
 #[derive(Debug)]
@@ -77,6 +79,7 @@ fn analyze_csv<R: BufRead>(mut reader: R) -> Result<CsvAddressStats, IoError> {
     let mut address_counts: HashMap<Ipv6Addr, usize> = HashMap::new();
     let mut total_count = 0;
     let mut active_count = 0;
+    let mut subnet_counts: HashMap<String, usize> = HashMap::new();
     for line in reader.lines() {
         let line = line?;
         let line = line.trim();
@@ -90,6 +93,14 @@ fn analyze_csv<R: BufRead>(mut reader: R) -> Result<CsvAddressStats, IoError> {
         if let Ok(addr) = fields[saddr_idx].parse::<Ipv6Addr>() {
             *address_counts.entry(addr).or_insert(0) += 1;
             total_count += 1;
+            // Count /64 subnet
+            let subnet = format!("{:x}:{:x}:{:x}:{:x}::/64", 
+                (u128::from(addr) >> 112) & 0xffff,
+                (u128::from(addr) >> 96) & 0xffff,
+                (u128::from(addr) >> 80) & 0xffff,
+                (u128::from(addr) >> 64) & 0xffff
+            );
+            *subnet_counts.entry(subnet).or_insert(0) += 1;
             // Check for active response if type column exists
             if let Some(type_idx) = type_idx {
                 if fields.len() > type_idx && fields[type_idx] == "129" {
@@ -116,6 +127,7 @@ fn analyze_csv<R: BufRead>(mut reader: R) -> Result<CsvAddressStats, IoError> {
         max_distance,
         coverage_ratio,
         active_response_ratio,
+        subnet_counts: Some(subnet_counts),
     })
 }
 
@@ -184,6 +196,7 @@ fn calculate_dispersion_metrics(addresses: &HashMap<Ipv6Addr, usize>) -> (f64, u
 fn analyze_ip_list<R: BufRead>(reader: R) -> Result<AddressStats, IoError> {
     let mut address_counts: HashMap<Ipv6Addr, usize> = HashMap::new();
     let mut total_count = 0;
+    let mut subnet_counts: HashMap<String, usize> = HashMap::new();
     // Count occurrences of each address
     for line in reader.lines() {
         let line = line?;
@@ -194,6 +207,14 @@ fn analyze_ip_list<R: BufRead>(reader: R) -> Result<AddressStats, IoError> {
         if let Ok(addr) = line.parse::<Ipv6Addr>() {
             *address_counts.entry(addr).or_insert(0) += 1;
             total_count += 1;
+            // Count /64 subnet
+            let subnet = format!("{:x}:{:x}:{:x}:{:x}::/64", 
+                (u128::from(addr) >> 112) & 0xffff,
+                (u128::from(addr) >> 96) & 0xffff,
+                (u128::from(addr) >> 80) & 0xffff,
+                (u128::from(addr) >> 64) & 0xffff
+            );
+            *subnet_counts.entry(subnet).or_insert(0) += 1;
         }
     }
     let unique_count = address_counts.len();
@@ -212,5 +233,89 @@ fn analyze_ip_list<R: BufRead>(reader: R) -> Result<AddressStats, IoError> {
         avg_distance,
         max_distance,
         coverage_ratio,
+        subnet_counts: Some(subnet_counts),
     })
+}
+
+/// Print the analysis result in a user-friendly way
+pub fn print_analysis_result(result: &AnalyzeResult) {
+    match result {
+        AnalyzeResult::IpList(stats) => {
+            println!("\nAddress Statistics:");
+            println!("Total addresses: {}", stats.total_count);
+            println!("Unique addresses: {}", stats.unique_count);
+            println!("Duplicate addresses: {}", stats.duplicate_count);
+            println!("Total entropy: {:.4} bits", stats.total_entropy);
+            println!("\nDispersion Metrics:");
+            println!("Average distance (log2): {:.2} bits", stats.avg_distance);
+            println!("Maximum distance: 2^{:.2} ({})", 
+                (stats.max_distance as f64).log2(),
+                stats.max_distance);
+            println!("Coverage ratio: {:.2e}", stats.coverage_ratio);
+            // Print top /64 subnets
+            if let Some(subnet_counts) = &stats.subnet_counts {
+                print_top_subnets(subnet_counts);
+            }
+            // Interpret the results
+            println!("\nInterpretation:");
+            if stats.coverage_ratio < 1e-30 {
+                println!("The addresses are very sparsely distributed across the address space.");
+            } else if stats.coverage_ratio < 1e-20 {
+                println!("The addresses are moderately distributed across the address space.");
+            } else {
+                println!("The addresses are relatively densely packed within their range.");
+            }
+            if stats.avg_distance > 64.0 {
+                println!("Large gaps exist between addresses (average gap > 2^64).");
+            } else if stats.avg_distance > 32.0 {
+                println!("Medium-sized gaps exist between addresses (average gap > 2^32).");
+            } else {
+                println!("Addresses are relatively close to each other.");
+            }
+        }
+        AnalyzeResult::Csv(stats) => {
+            println!("\nAddress Statistics (CSV):");
+            println!("Total addresses: {}", stats.total_count);
+            println!("Unique addresses: {}", stats.unique_count);
+            println!("Duplicate addresses: {}", stats.duplicate_count);
+            println!("Total entropy: {:.4} bits", stats.total_entropy);
+            println!("\nDispersion Metrics:");
+            println!("Average distance (log2): {:.2} bits", stats.avg_distance);
+            println!("Maximum distance: 2^{:.2} ({})", 
+                (stats.max_distance as f64).log2(),
+                stats.max_distance);
+            println!("Coverage ratio: {:.2e}", stats.coverage_ratio);
+            println!("Proportion of active/response probes: {:.2}%", stats.active_response_ratio * 100.0);
+            // Print top /64 subnets
+            if let Some(subnet_counts) = &stats.subnet_counts {
+                print_top_subnets(subnet_counts);
+            }
+            // Interpret the results
+            println!("\nInterpretation:");
+            if stats.coverage_ratio < 1e-30 {
+                println!("The addresses are very sparsely distributed across the address space.");
+            } else if stats.coverage_ratio < 1e-20 {
+                println!("The addresses are moderately distributed across the address space.");
+            } else {
+                println!("The addresses are relatively densely packed within their range.");
+            }
+            if stats.avg_distance > 64.0 {
+                println!("Large gaps exist between addresses (average gap > 2^64).");
+            } else if stats.avg_distance > 32.0 {
+                println!("Medium-sized gaps exist between addresses (average gap > 2^32).");
+            } else {
+                println!("Addresses are relatively close to each other.");
+            }
+        }
+    }
+}
+
+fn print_top_subnets(subnet_counts: &std::collections::HashMap<String, usize>) {
+    use std::collections::HashMap;
+    let mut counts: Vec<_> = subnet_counts.iter().collect();
+    counts.sort_by(|a, b| b.1.cmp(a.1));
+    println!("\nTop /64 Subnets:");
+    for (i, (subnet, count)) in counts.iter().take(10).enumerate() {
+        println!("{}. {}: {} addresses", i + 1, subnet, count);
+    }
 }

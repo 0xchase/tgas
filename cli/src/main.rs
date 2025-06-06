@@ -6,7 +6,7 @@ use std::fs::File;
 use ipnet::IpNet;
 use hickory_resolver::AsyncResolver;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
-use analyze::{AnalyzeResult, AddressStats, CsvAddressStats};
+use analyze::{AnalyzeResult, AddressStats, CsvAddressStats, print_analysis_result};
 
 /// A simple example of clap
 #[derive(Parser)]
@@ -291,67 +291,7 @@ async fn main() {
             let reader = BufReader::new(file);
             match analyze::analyze(reader) {
                 Ok(result) => {
-                    match result {
-                        AnalyzeResult::IpList(stats) => {
-                            println!("\nAddress Statistics:");
-                            println!("Total addresses: {}", stats.total_count);
-                            println!("Unique addresses: {}", stats.unique_count);
-                            println!("Duplicate addresses: {}", stats.duplicate_count);
-                            println!("Total entropy: {:.4} bits", stats.total_entropy);
-                            println!("\nDispersion Metrics:");
-                            println!("Average distance (log2): {:.2} bits", stats.avg_distance);
-                            println!("Maximum distance: 2^{:.2} ({})", 
-                                (stats.max_distance as f64).log2(),
-                                stats.max_distance);
-                            println!("Coverage ratio: {:.2e}", stats.coverage_ratio);
-                            // Interpret the results
-                            println!("\nInterpretation:");
-                            if stats.coverage_ratio < 1e-30 {
-                                println!("The addresses are very sparsely distributed across the address space.");
-                            } else if stats.coverage_ratio < 1e-20 {
-                                println!("The addresses are moderately distributed across the address space.");
-                            } else {
-                                println!("The addresses are relatively densely packed within their range.");
-                            }
-                            if stats.avg_distance > 64.0 {
-                                println!("Large gaps exist between addresses (average gap > 2^64).");
-                            } else if stats.avg_distance > 32.0 {
-                                println!("Medium-sized gaps exist between addresses (average gap > 2^32).");
-                            } else {
-                                println!("Addresses are relatively close to each other.");
-                            }
-                        }
-                        AnalyzeResult::Csv(stats) => {
-                            println!("\nAddress Statistics (CSV):");
-                            println!("Total addresses: {}", stats.total_count);
-                            println!("Unique addresses: {}", stats.unique_count);
-                            println!("Duplicate addresses: {}", stats.duplicate_count);
-                            println!("Total entropy: {:.4} bits", stats.total_entropy);
-                            println!("\nDispersion Metrics:");
-                            println!("Average distance (log2): {:.2} bits", stats.avg_distance);
-                            println!("Maximum distance: 2^{:.2} ({})", 
-                                (stats.max_distance as f64).log2(),
-                                stats.max_distance);
-                            println!("Coverage ratio: {:.2e}", stats.coverage_ratio);
-                            println!("Proportion of active/response probes: {:.2}%", stats.active_response_ratio * 100.0);
-                            // Interpret the results
-                            println!("\nInterpretation:");
-                            if stats.coverage_ratio < 1e-30 {
-                                println!("The addresses are very sparsely distributed across the address space.");
-                            } else if stats.coverage_ratio < 1e-20 {
-                                println!("The addresses are moderately distributed across the address space.");
-                            } else {
-                                println!("The addresses are relatively densely packed within their range.");
-                            }
-                            if stats.avg_distance > 64.0 {
-                                println!("Large gaps exist between addresses (average gap > 2^64).");
-                            } else if stats.avg_distance > 32.0 {
-                                println!("Medium-sized gaps exist between addresses (average gap > 2^32).");
-                            } else {
-                                println!("Addresses are relatively close to each other.");
-                            }
-                        }
-                    }
+                    print_analysis_result(&result);
                 }
                 Err(e) => {
                     eprintln!("Error analyzing file: {}", e);
