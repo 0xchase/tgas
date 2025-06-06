@@ -40,6 +40,7 @@ Core Modules
   - **scan output**: parse any zmap or ipv6kit output
   - **tga model**: parse a tga model file, identify the tga, load the tga, print supported information about it
   - **address list**: parse an address list
+  - something like zesplot
   - metrics
   - tables
   - graphs
@@ -74,6 +75,8 @@ Core Modules
   - *feedback*: live update any analysis
 - **data**: `download`
   - download common data sources
+  - BGP, DNS, CDNs, etc.
+  - https://opendata.rapid7.com/
   - load from files
   - parse from arguments
 - **server**: `serve`
