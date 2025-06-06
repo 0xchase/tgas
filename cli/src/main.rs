@@ -6,7 +6,7 @@ use std::fs::File;
 use ipnet::IpNet;
 use hickory_resolver::AsyncResolver;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
-use analyze::{AnalyzeResult, AddressStats, CsvAddressStats, print_analysis_result};
+use analyze::{AnalysisType, print_analysis_result};
 
 /// A simple example of clap
 #[derive(Parser)]
@@ -39,6 +39,42 @@ enum ProbeModule {
     TcpSynScan,
     IcmpEchoScan,
     UdpScan,
+}
+
+#[derive(Subcommand)]
+enum AnalysisCommand {
+    /// Basic address counts and statistics
+    Counts {
+        /// Path to file containing IPv6 addresses
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+    },
+    /// Address space dispersion metrics
+    Dispersion {
+        /// Path to file containing IPv6 addresses
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+    },
+    /// Information entropy analysis
+    Entropy {
+        /// Path to file containing IPv6 addresses
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+    },
+    /// Subnet distribution analysis
+    Subnets {
+        /// Path to file containing IPv6 addresses
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+        
+        /// Maximum number of subnets to show (default: 10)
+        #[arg(short = 'n', long, value_parser = clap::value_parser!(usize), default_value_t = 10)]
+        max_subnets: usize,
+
+        /// CIDR prefix length (default: 64)
+        #[arg(short = 'l', long, value_parser = clap::value_parser!(u8).range(1..=128), default_value_t = 64)]
+        prefix_length: u8,
+    },
 }
 
 #[derive(Subcommand)]
@@ -129,9 +165,8 @@ enum Commands {
     Discover,
     /// Analyze IPv6 addresses from a file
     Analyze {
-        /// Path to file containing IPv6 addresses (one per line)
-        #[arg(value_name = "FILE")]
-        file: PathBuf,
+        #[command(subcommand)]
+        command: AnalysisCommand,
     },
 }
 
@@ -274,29 +309,44 @@ async fn main() {
             println!("Running 'discover' command");
             // TODO: implement discover logic
         }
-        Commands::Analyze { file } => {
-            if !file.exists() {
-                eprintln!("Error: File not found: {}", file.display());
-                std::process::exit(1);
-            }
-            
-            let file = match File::open(file) {
-                Ok(f) => f,
-                Err(e) => {
-                    eprintln!("Error opening file: {}", e);
-                    std::process::exit(1);
-                }
-            };
-            
-            let reader = BufReader::new(file);
-            match analyze::analyze(reader) {
-                Ok(result) => {
-                    print_analysis_result(&result);
-                }
-                Err(e) => {
-                    eprintln!("Error analyzing file: {}", e);
-                    std::process::exit(1);
-                }
+        Commands::Analyze { command } => {
+            match command {
+                AnalysisCommand::Counts { file } => {
+                    let file = File::open(file).expect("Failed to open file");
+                    let reader = BufReader::new(file);
+                    match analyze::analyze(reader, AnalysisType::Counts, None) {
+                        Ok(results) => print_analysis_result(&*results),
+                        Err(e) => eprintln!("Analysis failed: {}", e),
+                    }
+                },
+                AnalysisCommand::Dispersion { file } => {
+                    let file = File::open(file).expect("Failed to open file");
+                    let reader = BufReader::new(file);
+                    match analyze::analyze(reader, AnalysisType::Dispersion, None) {
+                        Ok(results) => print_analysis_result(&*results),
+                        Err(e) => eprintln!("Analysis failed: {}", e),
+                    }
+                },
+                AnalysisCommand::Entropy { file } => {
+                    let file = File::open(file).expect("Failed to open file");
+                    let reader = BufReader::new(file);
+                    match analyze::analyze(reader, AnalysisType::Entropy, None) {
+                        Ok(results) => print_analysis_result(&*results),
+                        Err(e) => eprintln!("Analysis failed: {}", e),
+                    }
+                },
+                AnalysisCommand::Subnets { file, max_subnets, prefix_length } => {
+                    let file = File::open(file).expect("Failed to open file");
+                    let reader = BufReader::new(file);
+                    let subnet_options = Some(analyze::SubnetOptions {
+                        max_subnets: *max_subnets,
+                        prefix_length: *prefix_length,
+                    });
+                    match analyze::analyze(reader, AnalysisType::Subnets, subnet_options) {
+                        Ok(results) => print_analysis_result(&*results),
+                        Err(e) => eprintln!("Analysis failed: {}", e),
+                    }
+                },
             }
         }
     }

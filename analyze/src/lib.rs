@@ -1,321 +1,148 @@
 use std::io::{BufRead, Error as IoError};
-use std::net::Ipv6Addr;
+use std::net::{IpAddr, Ipv6Addr};
 use std::collections::HashMap;
+use std::str::FromStr;
+use std::fmt::Display;
 
-#[derive(Debug)]
-pub struct AddressStats {
-    pub total_count: usize,
-    pub unique_count: usize,
-    pub duplicate_count: usize,
-    pub total_entropy: f64,
-    pub avg_distance: f64,
-    pub max_distance: u128,
-    pub coverage_ratio: f64,
-    pub subnet_counts: Option<HashMap<String, usize>>,
+mod analysis;
+mod formats;
+
+pub use formats::{IpListIterator, ScanResultIterator, ScanResultRow};
+pub use analysis::{DispersionAnalysis, EntropyAnalysis, StatisticsAnalysis, SubnetAnalysis};
+
+/// Trait for analysis results that can be printed
+pub trait PrintableResults: Display {
+    fn print(&self);
 }
 
-#[derive(Debug)]
-pub struct CsvAddressStats {
-    pub total_count: usize,
-    pub unique_count: usize,
-    pub duplicate_count: usize,
-    pub total_entropy: f64,
-    pub avg_distance: f64,
-    pub max_distance: u128,
-    pub coverage_ratio: f64,
-    pub active_response_ratio: f64,
-    pub subnet_counts: Option<HashMap<String, usize>>,
+/// Trait for IPv6 address analysis implementations
+pub trait Analysis<T> {
+    type Results: PrintableResults;
+
+    /// Absorb a new value into the analysis
+    fn absorb(&mut self, value: T);
+    
+    /// Get the final analysis results
+    fn results(self) -> Self::Results;
 }
 
-#[derive(Debug)]
-pub enum AnalyzeResult {
-    IpList(AddressStats),
-    Csv(CsvAddressStats),
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SubnetOptions {
+    pub max_subnets: usize,
+    pub prefix_length: u8,
 }
 
-pub fn analyze<R: BufRead>(mut reader: R) -> Result<AnalyzeResult, IoError> {
-    // Peek at the first non-empty, non-comment line to determine file type
-    let mut first_line = String::new();
-    while reader.read_line(&mut first_line)? > 0 {
-        let trimmed = first_line.trim();
-        if !trimmed.is_empty() && !trimmed.starts_with('#') {
-            break;
+impl Default for SubnetOptions {
+    fn default() -> Self {
+        Self {
+            max_subnets: 10,
+            prefix_length: 64,
         }
-        first_line.clear();
-    }
-    let is_csv = first_line.contains(",");
-    // Rewind the reader by re-creating it with the first line included
-    let mut lines = vec![first_line];
-    for line in reader.lines() {
-        lines.push(line?);
-    }
-    let cursor = std::io::Cursor::new(lines.join("\n"));
-    let buf_reader = std::io::BufReader::new(cursor);
-    if is_csv {
-        analyze_csv(buf_reader).map(AnalyzeResult::Csv)
-    } else {
-        analyze_ip_list(buf_reader).map(AnalyzeResult::IpList)
     }
 }
 
-fn analyze_csv<R: BufRead>(mut reader: R) -> Result<CsvAddressStats, IoError> {
-    use std::io::BufRead;
-    use std::net::Ipv6Addr;
-    use std::collections::HashMap;
-    let mut header = String::new();
-    // Read header
-    let n = reader.read_line(&mut header)?;
-    if n == 0 {
-        return Err(IoError::from(std::io::ErrorKind::UnexpectedEof));
-    }
-    let header = header.trim();
-    let columns: Vec<&str> = header.split(',').collect();
-    let saddr_idx = columns.iter().position(|&c| c == "saddr");
-    let type_idx = columns.iter().position(|&c| c == "type");
-    if saddr_idx.is_none() {
-        return Err(IoError::new(std::io::ErrorKind::InvalidData, "No saddr column in CSV header"));
-    }
-    let saddr_idx = saddr_idx.unwrap();
-    let mut address_counts: HashMap<Ipv6Addr, usize> = HashMap::new();
-    let mut total_count = 0;
-    let mut active_count = 0;
-    let mut subnet_counts: HashMap<String, usize> = HashMap::new();
-    for line in reader.lines() {
-        let line = line?;
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
+#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
+#[value(rename_all = "snake_case")]
+pub enum AnalysisType {
+    /// Basic address counts and statistics (total, unique, duplicates)
+    Counts,
+    /// Address space dispersion metrics (distances between addresses)
+    Dispersion,
+    /// Information entropy analysis of address distribution
+    Entropy,
+    /// Subnet distribution analysis
+    Subnets,
+}
+
+pub fn analyze<R: BufRead>(reader: R, analysis_type: AnalysisType, subnet_options: Option<SubnetOptions>) -> Result<Box<dyn PrintableResults>, IoError> {
+    // First identify the format
+    let mut line_buffer = String::new();
+    let mut lines = Vec::new();
+    {
+        let mut peek_reader = reader;
+        while peek_reader.read_line(&mut line_buffer)? > 0 {
+            lines.push(line_buffer.clone());
+            line_buffer.clear();
         }
-        let fields: Vec<&str> = line.split(',').collect();
-        if fields.len() <= saddr_idx {
-            continue;
+    }
+    
+    // Create a new reader from the collected lines
+    let content = lines.join("");
+    let reader = std::io::Cursor::new(content);
+    let format = formats::identify_format(std::io::BufReader::new(reader))?;
+
+    // Create a new reader for actual processing
+    let reader = std::io::Cursor::new(lines.join(""));
+    let reader = std::io::BufReader::new(reader);
+
+    // Process the input based on format and analysis type
+    match (format, analysis_type) {
+        (formats::Format::IpList | formats::Format::ScanResult, analysis_type) => {
+            match analysis_type {
+                AnalysisType::Counts => {
+                    let mut analyzer = StatisticsAnalysis::new();
+                    process_input(reader, format, &mut analyzer)?;
+                    Ok(Box::new(analyzer.results()))
+                },
+                AnalysisType::Dispersion => {
+                    let mut analyzer = DispersionAnalysis::new();
+                    process_input(reader, format, &mut analyzer)?;
+                    Ok(Box::new(analyzer.results()))
+                },
+                AnalysisType::Entropy => {
+                    let mut analyzer = EntropyAnalysis::new();
+                    process_input(reader, format, &mut analyzer)?;
+                    Ok(Box::new(analyzer.results()))
+                },
+                AnalysisType::Subnets => {
+                    let options = subnet_options.unwrap_or_default();
+                    let mut analyzer = SubnetAnalysis::new_with_options(options.max_subnets, options.prefix_length);
+                    process_input(reader, format, &mut analyzer)?;
+                    Ok(Box::new(analyzer.results()))
+                },
+            }
+        },
+        (formats::Format::Unknown, _) => {
+            Err(IoError::new(
+                std::io::ErrorKind::InvalidData,
+                "Could not determine file format"
+            ))
         }
-        if let Ok(addr) = fields[saddr_idx].parse::<Ipv6Addr>() {
-            *address_counts.entry(addr).or_insert(0) += 1;
-            total_count += 1;
-            // Count /64 subnet
-            let subnet = format!("{:x}:{:x}:{:x}:{:x}::/64", 
-                (u128::from(addr) >> 112) & 0xffff,
-                (u128::from(addr) >> 96) & 0xffff,
-                (u128::from(addr) >> 80) & 0xffff,
-                (u128::from(addr) >> 64) & 0xffff
-            );
-            *subnet_counts.entry(subnet).or_insert(0) += 1;
-            // Check for active response if type column exists
-            if let Some(type_idx) = type_idx {
-                if fields.len() > type_idx && fields[type_idx] == "129" {
-                    active_count += 1;
+    }
+}
+
+fn process_input<R: BufRead, A: Analysis<Ipv6Addr>>(
+    reader: R,
+    format: formats::Format,
+    analyzer: &mut A,
+) -> Result<(), IoError> {
+    match format {
+        formats::Format::IpList => {
+            let iter = IpListIterator::new(reader);
+            for result in iter {
+                match result? {
+                    IpAddr::V6(addr) => analyzer.absorb(addr),
+                    _ => continue, // Skip non-IPv6 addresses
                 }
             }
         }
-    }
-    let unique_count = address_counts.len();
-    let duplicate_count = total_count - unique_count;
-    let total_entropy = calculate_address_entropy(&address_counts, total_count);
-    let (avg_distance, max_distance, coverage_ratio) = if unique_count > 1 {
-        calculate_dispersion_metrics(&address_counts)
-    } else {
-        (0.0, 0, 0.0)
-    };
-    let active_response_ratio = if total_count > 0 { active_count as f64 / total_count as f64 } else { 0.0 };
-    Ok(CsvAddressStats {
-        total_count,
-        unique_count,
-        duplicate_count,
-        total_entropy,
-        avg_distance,
-        max_distance,
-        coverage_ratio,
-        active_response_ratio,
-        subnet_counts: Some(subnet_counts),
-    })
-}
-
-fn calculate_address_entropy(addresses: &HashMap<Ipv6Addr, usize>, total: usize) -> f64 {
-    let mut entropy = 0.0;
-    let total = total as f64;
-
-    for &count in addresses.values() {
-        let probability = count as f64 / total;
-        if probability > 0.0 {
-            entropy -= probability * probability.log2();
-        }
-    }
-
-    entropy
-}
-
-fn calculate_dispersion_metrics(addresses: &HashMap<Ipv6Addr, usize>) -> (f64, u128, f64) {
-    // Convert addresses to u128 for easier arithmetic
-    let mut addr_nums: Vec<u128> = addresses.keys()
-        .map(|addr| u128::from_be_bytes(addr.octets()))
-        .collect();
-    addr_nums.sort_unstable();
-
-    // Calculate average and maximum distance between consecutive addresses
-    let mut total_distance = 0u128;
-    let mut max_distance = 0u128;
-    let mut gaps = Vec::new();
-
-    for window in addr_nums.windows(2) {
-        let distance = window[1] - window[0];
-        total_distance = total_distance.saturating_add(distance);
-        max_distance = max_distance.max(distance);
-        gaps.push(distance);
-    }
-
-    let avg_distance = if gaps.is_empty() {
-        0.0
-    } else {
-        // Use log scale for the average to handle IPv6's huge address space
-        let sum_log_distances: f64 = gaps.iter()
-            .map(|&d| (d as f64).log2())
-            .sum();
-        sum_log_distances / gaps.len() as f64
-    };
-
-    // Calculate coverage ratio (how much of the potential address space is used)
-    // We do this by comparing the actual span to the theoretical maximum span
-    let actual_span = if addr_nums.len() > 1 {
-        addr_nums.last().unwrap() - addr_nums.first().unwrap()
-    } else {
-        0
-    };
-
-    // Coverage ratio is the number of addresses divided by the span size
-    // This gives us a measure of how densely the addresses fill their range
-    let coverage_ratio = if actual_span > 0 {
-        (addr_nums.len() as f64) / (actual_span as f64)
-    } else {
-        0.0
-    };
-
-    (avg_distance, max_distance, coverage_ratio)
-}
-
-fn analyze_ip_list<R: BufRead>(reader: R) -> Result<AddressStats, IoError> {
-    let mut address_counts: HashMap<Ipv6Addr, usize> = HashMap::new();
-    let mut total_count = 0;
-    let mut subnet_counts: HashMap<String, usize> = HashMap::new();
-    // Count occurrences of each address
-    for line in reader.lines() {
-        let line = line?;
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        if let Ok(addr) = line.parse::<Ipv6Addr>() {
-            *address_counts.entry(addr).or_insert(0) += 1;
-            total_count += 1;
-            // Count /64 subnet
-            let subnet = format!("{:x}:{:x}:{:x}:{:x}::/64", 
-                (u128::from(addr) >> 112) & 0xffff,
-                (u128::from(addr) >> 96) & 0xffff,
-                (u128::from(addr) >> 80) & 0xffff,
-                (u128::from(addr) >> 64) & 0xffff
-            );
-            *subnet_counts.entry(subnet).or_insert(0) += 1;
-        }
-    }
-    let unique_count = address_counts.len();
-    let duplicate_count = total_count - unique_count;
-    let total_entropy = calculate_address_entropy(&address_counts, total_count);
-    let (avg_distance, max_distance, coverage_ratio) = if unique_count > 1 {
-        calculate_dispersion_metrics(&address_counts)
-    } else {
-        (0.0, 0, 0.0)
-    };
-    Ok(AddressStats {
-        total_count,
-        unique_count,
-        duplicate_count,
-        total_entropy,
-        avg_distance,
-        max_distance,
-        coverage_ratio,
-        subnet_counts: Some(subnet_counts),
-    })
-}
-
-/// Print the analysis result in a user-friendly way
-pub fn print_analysis_result(result: &AnalyzeResult) {
-    match result {
-        AnalyzeResult::IpList(stats) => {
-            println!("\nAddress Statistics:");
-            println!("Total addresses: {}", stats.total_count);
-            println!("Unique addresses: {}", stats.unique_count);
-            println!("Duplicate addresses: {}", stats.duplicate_count);
-            println!("Total entropy: {:.4} bits", stats.total_entropy);
-            println!("\nDispersion Metrics:");
-            println!("Average distance (log2): {:.2} bits", stats.avg_distance);
-            println!("Maximum distance: 2^{:.2} ({})", 
-                (stats.max_distance as f64).log2(),
-                stats.max_distance);
-            println!("Coverage ratio: {:.2e}", stats.coverage_ratio);
-            // Print top /64 subnets
-            if let Some(subnet_counts) = &stats.subnet_counts {
-                print_top_subnets(subnet_counts);
-            }
-            // Interpret the results
-            println!("\nInterpretation:");
-            if stats.coverage_ratio < 1e-30 {
-                println!("The addresses are very sparsely distributed across the address space.");
-            } else if stats.coverage_ratio < 1e-20 {
-                println!("The addresses are moderately distributed across the address space.");
-            } else {
-                println!("The addresses are relatively densely packed within their range.");
-            }
-            if stats.avg_distance > 64.0 {
-                println!("Large gaps exist between addresses (average gap > 2^64).");
-            } else if stats.avg_distance > 32.0 {
-                println!("Medium-sized gaps exist between addresses (average gap > 2^32).");
-            } else {
-                println!("Addresses are relatively close to each other.");
+        formats::Format::ScanResult => {
+            let iter = ScanResultIterator::new(reader)?;
+            for result in iter {
+                let row = result?;
+                analyzer.absorb(row.address);
             }
         }
-        AnalyzeResult::Csv(stats) => {
-            println!("\nAddress Statistics (CSV):");
-            println!("Total addresses: {}", stats.total_count);
-            println!("Unique addresses: {}", stats.unique_count);
-            println!("Duplicate addresses: {}", stats.duplicate_count);
-            println!("Total entropy: {:.4} bits", stats.total_entropy);
-            println!("\nDispersion Metrics:");
-            println!("Average distance (log2): {:.2} bits", stats.avg_distance);
-            println!("Maximum distance: 2^{:.2} ({})", 
-                (stats.max_distance as f64).log2(),
-                stats.max_distance);
-            println!("Coverage ratio: {:.2e}", stats.coverage_ratio);
-            println!("Proportion of active/response probes: {:.2}%", stats.active_response_ratio * 100.0);
-            // Print top /64 subnets
-            if let Some(subnet_counts) = &stats.subnet_counts {
-                print_top_subnets(subnet_counts);
-            }
-            // Interpret the results
-            println!("\nInterpretation:");
-            if stats.coverage_ratio < 1e-30 {
-                println!("The addresses are very sparsely distributed across the address space.");
-            } else if stats.coverage_ratio < 1e-20 {
-                println!("The addresses are moderately distributed across the address space.");
-            } else {
-                println!("The addresses are relatively densely packed within their range.");
-            }
-            if stats.avg_distance > 64.0 {
-                println!("Large gaps exist between addresses (average gap > 2^64).");
-            } else if stats.avg_distance > 32.0 {
-                println!("Medium-sized gaps exist between addresses (average gap > 2^32).");
-            } else {
-                println!("Addresses are relatively close to each other.");
-            }
+        formats::Format::Unknown => {
+            return Err(IoError::new(
+                std::io::ErrorKind::InvalidData,
+                "Could not determine file format"
+            ));
         }
     }
+    Ok(())
 }
 
-fn print_top_subnets(subnet_counts: &std::collections::HashMap<String, usize>) {
-    use std::collections::HashMap;
-    let mut counts: Vec<_> = subnet_counts.iter().collect();
-    counts.sort_by(|a, b| b.1.cmp(a.1));
-    println!("\nTop /64 Subnets:");
-    for (i, (subnet, count)) in counts.iter().take(10).enumerate() {
-        println!("{}. {}: {} addresses", i + 1, subnet, count);
-    }
+pub fn print_analysis_result(result: &dyn PrintableResults) {
+    result.print();
 }
