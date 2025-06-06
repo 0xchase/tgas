@@ -40,6 +40,7 @@ Core Modules
   - **scan output**: parse any zmap or ipv6kit output
   - **tga model**: parse a tga model file, identify the tga, load the tga, print supported information about it
   - **address list**: parse an address list
+  - **extract**: Extract elements from a dump per category or other property
   - something like zesplot
   - metrics
   - tables

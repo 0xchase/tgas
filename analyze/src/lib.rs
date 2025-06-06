@@ -27,31 +27,21 @@ pub trait Analysis<T> {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct SubnetOptions {
-    pub max_subnets: usize,
-    pub prefix_length: u8,
-}
-
-impl Default for SubnetOptions {
-    fn default() -> Self {
-        Self {
-            max_subnets: 10,
-            prefix_length: 64,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, clap::ValueEnum)]
-#[value(rename_all = "snake_case")]
 pub enum AnalysisType {
     /// Basic address counts and statistics (total, unique, duplicates)
     Counts,
     /// Address space dispersion metrics (distances between addresses)
     Dispersion,
-    /// Information entropy analysis of address distribution
-    Entropy,
+    /// Information entropy analysis
+    Entropy {
+        start_bit: u8,
+        end_bit: u8,
+    },
     /// Subnet distribution analysis
-    Subnets,
+    Subnets {
+        max_subnets: usize,
+        prefix_length: u8,
+    },
 }
 
 struct ProgressTracker {
@@ -68,9 +58,9 @@ impl ProgressTracker {
         let pb = ProgressBar::new(total_size);
         pb.set_style(
             ProgressStyle::default_bar()
-                .template("{spinner:.green} [{elapsed_precise}] Processed {msg} [{bar:20.cyan/blue}] {bytes}/{total_bytes}")
+                .template("{spinner:.green} [{elapsed_precise}] Processed {msg} [{bar:20.cyan/grey}] {bytes}/{total_bytes}")
                 .expect("Failed to create progress bar template")
-                // .progress_chars("█░░")
+                .progress_chars("█░")
         );
         pb.set_message(format!("0 {}", item_type));
 
@@ -112,7 +102,7 @@ impl ProgressTracker {
     }
 }
 
-pub fn analyze<R: BufRead>(mut reader: R, analysis_type: AnalysisType, subnet_options: Option<SubnetOptions>, file_size: u64) -> Result<Box<dyn PrintableResults>, IoError> {
+pub fn analyze<R: BufRead>(mut reader: R, analysis_type: AnalysisType, file_size: u64) -> Result<Box<dyn PrintableResults>, IoError> {
     // Identify format
     let format = formats::identify_format(&mut reader)?;
 
@@ -130,14 +120,13 @@ pub fn analyze<R: BufRead>(mut reader: R, analysis_type: AnalysisType, subnet_op
                     process_input(reader, format, &mut analyzer, file_size)?;
                     Ok(Box::new(analyzer.results()))
                 },
-                AnalysisType::Entropy => {
-                    let mut analyzer = EntropyAnalysis::new();
+                AnalysisType::Entropy { start_bit, end_bit } => {
+                    let mut analyzer = EntropyAnalysis::new_with_options(start_bit, end_bit);
                     process_input(reader, format, &mut analyzer, file_size)?;
                     Ok(Box::new(analyzer.results()))
                 },
-                AnalysisType::Subnets => {
-                    let options = subnet_options.unwrap_or_default();
-                    let mut analyzer = SubnetAnalysis::new_with_options(options.max_subnets, options.prefix_length);
+                AnalysisType::Subnets { max_subnets, prefix_length } => {
+                    let mut analyzer = SubnetAnalysis::new_with_options(max_subnets, prefix_length);
                     process_input(reader, format, &mut analyzer, file_size)?;
                     Ok(Box::new(analyzer.results()))
                 },

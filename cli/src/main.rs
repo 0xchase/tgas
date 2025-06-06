@@ -60,6 +60,14 @@ enum AnalysisCommand {
         /// Path to file containing IPv6 addresses
         #[arg(value_name = "FILE")]
         file: PathBuf,
+
+        /// Start bit position (0-127) for entropy calculation
+        #[arg(short = 's', long, value_parser = clap::value_parser!(u8).range(0..=127), default_value_t = 0)]
+        start_bit: u8,
+
+        /// End bit position (1-128) for entropy calculation
+        #[arg(short = 'e', long, value_parser = clap::value_parser!(u8).range(1..=128), default_value_t = 128)]
+        end_bit: u8,
     },
     /// Subnet distribution analysis
     Subnets {
@@ -228,21 +236,20 @@ impl Target {
 }
 
 fn analyze_file(
-    file_path: &PathBuf,
-    analysis_type: AnalysisType,
-    subnet_options: Option<analyze::SubnetOptions>,
+    file: &PathBuf,
+    analysis_type: analyze::AnalysisType,
 ) -> Result<(), String> {
-    let file_size = file_path
+    let file_size = file
         .metadata()
         .map(|m| m.len())
         .map_err(|e| format!("Failed to get file metadata: {}", e))?;
     
-    let file = File::open(file_path)
+    let file = File::open(file)
         .map_err(|e| format!("Failed to open file: {}", e))?;
     
     let reader = BufReader::with_capacity(1024, file);
     
-    match analyze::analyze(reader, analysis_type, subnet_options, file_size) {
+    match analyze::analyze(reader, analysis_type, file_size) {
         Ok(results) => {
             print_analysis_result(&*results);
             Ok(())
@@ -336,20 +343,26 @@ async fn main() {
         Commands::Analyze { command } => {
             let result = match command {
                 AnalysisCommand::Counts { file } => {
-                    analyze_file(file, AnalysisType::Counts, None)
+                    analyze_file(file, analyze::AnalysisType::Counts)
                 },
                 AnalysisCommand::Dispersion { file } => {
-                    analyze_file(file, AnalysisType::Dispersion, None)
+                    analyze_file(file, analyze::AnalysisType::Dispersion)
                 },
-                AnalysisCommand::Entropy { file } => {
-                    analyze_file(file, AnalysisType::Entropy, None)
+                AnalysisCommand::Entropy { file, start_bit, end_bit } => {
+                    if start_bit >= end_bit {
+                        eprintln!("Error: start_bit must be less than end_bit");
+                        std::process::exit(1);
+                    }
+                    analyze_file(file, analyze::AnalysisType::Entropy {
+                        start_bit: *start_bit,
+                        end_bit: *end_bit,
+                    })
                 },
                 AnalysisCommand::Subnets { file, max_subnets, prefix_length } => {
-                    let subnet_options = Some(analyze::SubnetOptions {
+                    analyze_file(file, analyze::AnalysisType::Subnets {
                         max_subnets: *max_subnets,
                         prefix_length: *prefix_length,
-                    });
-                    analyze_file(file, AnalysisType::Subnets, subnet_options)
+                    })
                 },
             };
 
