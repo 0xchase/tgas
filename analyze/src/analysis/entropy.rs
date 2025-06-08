@@ -3,90 +3,89 @@ use std::net::Ipv6Addr;
 use std::fmt;
 use polars::prelude::*;
 use plugin::contracts::{AbsorbField, MyField};
-use crate::PrintableResults;
 
-const BLUE: &str = "\x1b[34m";
-const RESET: &str = "\x1b[0m";
-
-#[derive(Default)]
-pub struct EntropyConfig {
+pub struct ShannonEntropyConfig {
     pub start_bit: u8,
     pub end_bit: u8,
 }
 
-pub struct EntropyAnalysis {
-    pub entropy: f64,
-    pub count: usize,
-    pub start_bit: u8,
-    pub end_bit: u8,
-}
-
-impl EntropyAnalysis {
-    pub fn new_with_options(start_bit: u8, end_bit: u8) -> Self {
+impl Default for ShannonEntropyConfig {
+    fn default() -> Self {
         Self {
-            entropy: 0.0,
-            count: 0,
-            start_bit,
-            end_bit,
+            start_bit: 0,
+            end_bit: 128,
         }
     }
 }
 
-impl AbsorbField<Ipv6Addr> for EntropyAnalysis {
-    type Config = EntropyConfig;
+pub struct ShannonEntropyAnalysis {
+    bit_counts: HashMap<u8, usize>,
+    total_bits: usize,
+}
 
-    fn absorb(&mut self, config: &Self::Config, item: Ipv6Addr) {
-        let bytes = item.octets();
-        // For simplicity, just sum the bits in the selected range
-        let mut bit_sum = 0u32;
-        for bit in config.start_bit..config.end_bit {
-            let byte_idx = (bit / 8) as usize;
-            let bit_idx = bit % 8;
-            bit_sum += ((bytes[byte_idx] >> (7 - bit_idx)) & 1) as u32;
+impl ShannonEntropyAnalysis {
+    pub fn new_with_options(start_bit: u8, end_bit: u8) -> Self {
+        Self {
+            bit_counts: HashMap::new(),
+            total_bits: 0,
         }
-        self.entropy += bit_sum as f64 / (config.end_bit - config.start_bit) as f64;
-        self.count += 1;
+    }
+}
+
+impl AbsorbField<Ipv6Addr> for ShannonEntropyAnalysis {
+    type Config = ShannonEntropyConfig;
+
+    fn absorb(&mut self, config: &Self::Config, addr: Ipv6Addr) {
+        let bytes = addr.octets();
+        for i in config.start_bit..config.end_bit {
+            let byte_idx = (i / 8) as usize;
+            let bit_idx = i % 8;
+            if byte_idx < bytes.len() {
+                let bit = (bytes[byte_idx] >> bit_idx) & 1;
+                *self.bit_counts.entry(bit).or_insert(0) += 1;
+                self.total_bits += 1;
+            }
+        }
     }
 
     fn finalize(&mut self) -> DataFrame {
-        let avg_entropy = if self.count > 0 {
-            self.entropy / self.count as f64
-        } else {
-            0.0
-        };
+        let mut entropy = 0.0;
+        for count in self.bit_counts.values() {
+            let p = *count as f64 / self.total_bits as f64;
+            entropy -= p * p.log2();
+        }
+
         DataFrame::new(vec![
-            Column::new("entropy".into(), &[avg_entropy]),
-            Column::new("count".into(), &[self.count as u64]),
+            Column::new("entropy".into(), &[entropy]),
+            Column::new("total_bits".into(), &[self.total_bits as u64]),
+            Column::new("bit_distribution".into(), &[format!("{:?}", self.bit_counts)]),
         ]).unwrap()
     }
 }
 
 #[derive(Debug)]
-pub struct EntropyResults {
+pub struct ShannonEntropyResults {
     pub entropy: f64,
-    pub count: u64,
+    pub total_bits: usize,
+    pub bit_distribution: String,
 }
 
-impl EntropyResults {
-    pub fn from_dataframe(df: &DataFrame) -> Self {
+impl ShannonEntropyResults {
+    pub fn from_dataframe(df: &polars::prelude::DataFrame) -> Self {
         Self {
             entropy: df.column("entropy").unwrap().f64().unwrap().get(0).unwrap(),
-            count: df.column("count").unwrap().u64().unwrap().get(0).unwrap(),
+            total_bits: df.column("total_bits").unwrap().u64().unwrap().get(0).unwrap() as usize,
+            bit_distribution: df.column("bit_distribution").unwrap().str().unwrap().get(0).unwrap().to_string(),
         }
     }
 }
 
-impl fmt::Display for EntropyResults {
+impl fmt::Display for ShannonEntropyResults {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        writeln!(f, "Entropy Analysis Results:")?;
-        writeln!(f, "  Entropy: {:.4}", self.entropy)?;
-        writeln!(f, "  Count: {}", self.count)?;
+        writeln!(f, "Shannon Entropy Analysis Results:")?;
+        writeln!(f, "  Entropy: {:.4} bits", self.entropy)?;
+        writeln!(f, "  Total bits analyzed: {}", self.total_bits)?;
+        writeln!(f, "  Bit distribution: {}", self.bit_distribution)?;
         Ok(())
-    }
-}
-
-impl PrintableResults for EntropyResults {
-    fn print(&self) {
-        print!("{}", self);
     }
 }

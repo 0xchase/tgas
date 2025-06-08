@@ -58,6 +58,8 @@ Core Modules
     - subnets
     - graph: zesplot, bar, line, pie, scatter, heatmap, categories, (property vs. property)
   - classify addresses
+- **plot**
+  - Use the `plotlars` crate to easily plot any `DataFrame`
 - **filter/extract**
   - Modifying address lists or scan outputs
   - merge: merge and interweave two scans, or append two address lists

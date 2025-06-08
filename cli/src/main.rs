@@ -6,7 +6,7 @@ use std::fs::File;
 use ipnet::IpNet;
 use hickory_resolver::AsyncResolver;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
-use analyze::{AnalysisType, print_analysis_result};
+use analyze::{AnalysisType};
 use polars::prelude::*;
 
 /// A simple example of clap
@@ -280,7 +280,7 @@ fn analyze_file(
 
     match analyze::analyze(df, analysis_type) {
         Ok(results) => {
-            print_analysis_result(&*results);
+            println!("{}", results);
             Ok(())
         },
         Err(e) => Err(format!("Analysis failed: {}", e)),

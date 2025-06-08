@@ -3,7 +3,6 @@ use std::net::Ipv6Addr;
 use std::fmt;
 use polars::prelude::*;
 use plugin::contracts::{AbsorbField, MyField};
-use crate::PrintableResults;
 
 #[derive(Default)]
 pub struct SubnetConfig {
@@ -39,26 +38,21 @@ impl SubnetAnalysis {
 impl AbsorbField<Ipv6Addr> for SubnetAnalysis {
     type Config = SubnetConfig;
 
-    fn absorb(&mut self, config: &Self::Config, item: Ipv6Addr) {
-        let prefix_length = config.prefix_length;
-        let addr_u128 = u128::from_be_bytes(item.octets());
-        let prefix = if prefix_length == 128 {
-            addr_u128
-        } else {
-            addr_u128 >> (128 - prefix_length)
-        };
-        let subnet = format!("{:x}/{}", prefix, prefix_length);
+    fn absorb(&mut self, config: &Self::Config, addr: Ipv6Addr) {
+        let subnet = format!("{}/{}", addr, config.prefix_length);
         *self.subnet_counts.entry(subnet).or_insert(0) += 1;
     }
 
     fn finalize(&mut self) -> DataFrame {
-        let mut subnets: Vec<(String, usize)> = self.subnet_counts.iter().map(|(k, v)| (k.clone(), *v)).collect();
-        subnets.sort_by(|a, b| b.1.cmp(&a.1));
+        let mut subnets: Vec<_> = self.subnet_counts.iter().collect();
+        subnets.sort_by(|a, b| b.1.cmp(a.1));
         subnets.truncate(self.max_subnets);
-        let prefixes: Vec<String> = subnets.iter().map(|(subnet, _)| subnet.clone()).collect();
-        let counts: Vec<u64> = subnets.iter().map(|(_, count)| *count as u64).collect();
+
+        let subnet_names: Vec<String> = subnets.iter().cloned().map(|(name, _)| name.clone()).collect();
+        let counts: Vec<_> = subnets.iter().map(|(_, count)| **count as u64).collect();
+
         DataFrame::new(vec![
-            Column::new("subnet".into(), &prefixes),
+            Column::new("subnet".into(), &subnet_names),
             Column::new("count".into(), &counts),
         ]).unwrap()
     }
@@ -66,30 +60,25 @@ impl AbsorbField<Ipv6Addr> for SubnetAnalysis {
 
 #[derive(Debug)]
 pub struct SubnetResults {
-    pub subnets: Vec<String>,
-    pub counts: Vec<u64>,
+    pub subnets: Vec<(String, usize)>,
 }
 
 impl SubnetResults {
-    pub fn from_dataframe(df: &DataFrame) -> Self {
-        let subnets = df.column("subnet").unwrap().str().unwrap().into_no_null_iter().map(|s| s.to_string()).collect();
-        let counts = df.column("count").unwrap().u64().unwrap().into_no_null_iter().collect();
-        Self { subnets, counts }
+    pub fn from_dataframe(df: &polars::prelude::DataFrame) -> Self {
+        let subnets: Vec<_> = df.column("subnet").unwrap().str().unwrap().into_iter()
+            .zip(df.column("count").unwrap().u64().unwrap().into_iter())
+            .map(|(name, count)| (name.unwrap().to_string(), count.unwrap() as usize))
+            .collect();
+        Self { subnets }
     }
 }
 
 impl std::fmt::Display for SubnetResults {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         writeln!(f, "Subnet Analysis Results:")?;
-        for (subnet, count) in self.subnets.iter().zip(self.counts.iter()) {
+        for (subnet, count) in &self.subnets {
             writeln!(f, "  {}: {}", subnet, count)?;
         }
         Ok(())
-    }
-}
-
-impl PrintableResults for SubnetResults {
-    fn print(&self) {
-        println!("{}", self);
     }
 }

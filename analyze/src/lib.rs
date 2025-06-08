@@ -12,13 +12,8 @@ mod analysis;
 mod formats;
 
 pub use formats::{IpListIterator, ScanResultIterator, ScanResultRow};
-pub use analysis::{DispersionAnalysis, EntropyAnalysis, StatisticsAnalysis, SubnetAnalysis};
-pub use analysis::{DispersionResults, EntropyResults, StatisticsResults, SubnetResults};
-
-/// Trait for analysis results that can be printed
-pub trait PrintableResults: Display {
-    fn print(&self);
-}
+pub use analysis::{DispersionAnalysis, ShannonEntropyAnalysis, StatisticsAnalysis, SubnetAnalysis};
+pub use analysis::{DispersionResults, ShannonEntropyResults, StatisticsResults, SubnetResults};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnalysisType {
@@ -96,27 +91,23 @@ impl ProgressTracker {
     }
 }
 
-pub fn analyze(df: LazyFrame, analysis_type: AnalysisType) -> Result<Box<dyn PrintableResults>, IoError> {
+pub fn analyze(df: LazyFrame, analysis_type: AnalysisType) -> Result<DataFrame, IoError> {
     match analysis_type {
         AnalysisType::Counts => {
             let mut analyzer = StatisticsAnalysis::new();
-            let results_df = analyze_dataframe(df, &mut analyzer)?;
-            Ok(Box::new(StatisticsResults::from_dataframe(&results_df)))
+            analyze_dataframe(df, &mut analyzer)
         },
         AnalysisType::Dispersion => {
             let mut analyzer = DispersionAnalysis::new();
-            let results_df = analyze_dataframe(df, &mut analyzer)?;
-            Ok(Box::new(DispersionResults::from_dataframe(&results_df)))
+            analyze_dataframe(df, &mut analyzer)
         },
         AnalysisType::Entropy { start_bit, end_bit } => {
-            let mut analyzer = EntropyAnalysis::new_with_options(start_bit, end_bit);
-            let results_df = analyze_dataframe(df, &mut analyzer)?;
-            Ok(Box::new(EntropyResults::from_dataframe(&results_df)))
+            let mut analyzer = ShannonEntropyAnalysis::new_with_options(start_bit, end_bit);
+            analyze_dataframe(df, &mut analyzer)
         },
         AnalysisType::Subnets { max_subnets, prefix_length } => {
             let mut analyzer = SubnetAnalysis::new_with_options(max_subnets, prefix_length);
-            let results_df = analyze_dataframe(df, &mut analyzer)?;
-            Ok(Box::new(SubnetResults::from_dataframe(&results_df)))
+            analyze_dataframe(df, &mut analyzer)
         },
     }
 }
@@ -133,8 +124,11 @@ where
         format!("Failed to collect DataFrame: {}", e)
     ))?;
 
+    let total_rows = df.height();
+    let mut tracker = ProgressTracker::new(total_rows as u64, "addresses");
+
     for (col_name, series) in df.get_columns().iter().enumerate() {
-        println!("\nAnalyzing column: {}", col_name);
+        // println!("\nAnalyzing column: {}", col_name);
         for value in series.str().map_err(|e| IoError::new(
             std::io::ErrorKind::InvalidData,
             format!("Failed to convert series to string: {}", e)
@@ -144,12 +138,10 @@ where
                     analyzer.absorb(&A::Config::default(), addr);
                 }
             }
+            tracker.increment(tracker.count as u64);
         }
     }
 
+    tracker.finish(true);
     Ok(analyzer.finalize())
-}
-
-pub fn print_analysis_result(result: &dyn PrintableResults) {
-    result.print();
 }
