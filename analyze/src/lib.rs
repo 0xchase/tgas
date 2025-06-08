@@ -1,10 +1,10 @@
 use std::io::{BufRead, Error as IoError};
-use std::net::{IpAddr, Ipv6Addr};
+use std::net::{Ipv6Addr};
 use std::fmt::Display;
 use std::time::{Duration, Instant};
 use indicatif::{ProgressBar, ProgressStyle};
 use polars::prelude::*;
-use plugin::contracts::{AbsorbField, MyField};
+use plugin::contracts::AbsorbField;
 
 mod entropy_plugin;
 
@@ -13,25 +13,11 @@ mod formats;
 
 pub use formats::{IpListIterator, ScanResultIterator, ScanResultRow};
 pub use analysis::{DispersionAnalysis, EntropyAnalysis, StatisticsAnalysis, SubnetAnalysis};
-pub use analysis::statistics::StatisticsResults;
-pub use analysis::dispersion::DispersionResults;
-pub use analysis::entropy::EntropyResults;
-pub use analysis::subnets::SubnetResults;
+pub use analysis::{DispersionResults, EntropyResults, StatisticsResults, SubnetResults};
 
 /// Trait for analysis results that can be printed
 pub trait PrintableResults: Display {
     fn print(&self);
-}
-
-/// Trait for IPv6 address analysis implementations
-pub trait Analysis<T> {
-    type Results: PrintableResults;
-
-    /// Absorb a new value into the analysis
-    fn absorb(&mut self, value: T);
-    
-    /// Get the final analysis results
-    fn results(&self) -> Self::Results;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -111,7 +97,6 @@ impl ProgressTracker {
 }
 
 pub fn analyze(df: LazyFrame, analysis_type: AnalysisType) -> Result<Box<dyn PrintableResults>, IoError> {
-    // Process the input based on analysis type
     match analysis_type {
         AnalysisType::Counts => {
             let mut analyzer = StatisticsAnalysis::new();
@@ -139,18 +124,17 @@ pub fn analyze(df: LazyFrame, analysis_type: AnalysisType) -> Result<Box<dyn Pri
 fn analyze_dataframe<A: AbsorbField<Ipv6Addr>>(
     df: LazyFrame,
     analyzer: &mut A,
-) -> Result<DataFrame, IoError> {
-    // Collect the DataFrame and iterate over the rows
+) -> Result<DataFrame, IoError>
+where
+    A::Config: Default,
+{
     let df = df.collect().map_err(|e| IoError::new(
         std::io::ErrorKind::InvalidData,
         format!("Failed to collect DataFrame: {}", e)
     ))?;
 
-    // Analyze each column
     for (col_name, series) in df.get_columns().iter().enumerate() {
         println!("\nAnalyzing column: {}", col_name);
-        
-        // Convert each value to Ipv6Addr and absorb it
         for value in series.str().map_err(|e| IoError::new(
             std::io::ErrorKind::InvalidData,
             format!("Failed to convert series to string: {}", e)

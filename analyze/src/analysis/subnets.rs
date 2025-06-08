@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::net::Ipv6Addr;
 use std::fmt;
-use crate::{Analysis, PrintableResults};
 use polars::prelude::*;
 use plugin::contracts::{AbsorbField, MyField};
+use crate::PrintableResults;
 
 #[derive(Default)]
 pub struct SubnetConfig {
@@ -85,5 +85,11 @@ impl std::fmt::Display for SubnetResults {
             writeln!(f, "  {}: {}", subnet, count)?;
         }
         Ok(())
+    }
+}
+
+impl PrintableResults for SubnetResults {
+    fn print(&self) {
+        println!("{}", self);
     }
 }

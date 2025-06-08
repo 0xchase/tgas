@@ -1,9 +1,9 @@
 use std::collections::HashMap;
 use std::net::Ipv6Addr;
 use std::fmt;
-use crate::{Analysis, PrintableResults};
 use polars::prelude::*;
 use plugin::contracts::{AbsorbField, MyField};
+use crate::PrintableResults;
 
 const BLUE: &str = "\x1b[34m";
 const RESET: &str = "\x1b[0m";
