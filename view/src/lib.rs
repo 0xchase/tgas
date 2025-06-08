@@ -25,7 +25,6 @@ impl App {
     fn new(lf: LazyFrame) -> Self {
         let df = lf.collect().unwrap_or_else(|_| DataFrame::default());
         let mut state = TableState::default();
-        // Select the first row if the dataframe is not empty
         if !df.is_empty() {
             state.select(Some(0));
         }
@@ -34,65 +33,49 @@ impl App {
             state,
             df,
             scroll_x: 0,
-            viewport_height: 0, // Initialized to 0, will be updated on first render
+            viewport_height: 0, // Will be updated on first render
         }
     }
 
-    // Move selection to the next row, wrapping around at the end.
+    // Move selection to the next row, halting at the end.
     pub fn next(&mut self) {
         if self.df.is_empty() {
             return;
         }
-        let i = self.state.selected().map_or(0, |i| {
-            if i >= self.df.height() - 1 {
-                0
-            } else {
-                i + 1
-            }
-        });
+        let i = match self.state.selected() {
+            // Halt at the last item
+            Some(i) => (i + 1).min(self.df.height().saturating_sub(1)),
+            None => 0,
+        };
         self.state.select(Some(i));
 
-        // --- Manual Scroll Logic ---
-        // If the new selection is outside the viewport, adjust the scroll offset.
-        let viewport_height = self.viewport_height.saturating_sub(3); // Account for borders/header
-        if viewport_height > 0 {
+        // --- Manual "Sliding Window" Scroll Logic ---
+        let row_count = self.viewport_height.saturating_sub(3);
+        if row_count > 0 {
             let offset = self.state.offset();
-            if i >= offset + viewport_height {
-                // If selection is below the view, set offset to bring it into view from the bottom.
-                *self.state.offset_mut() = i - viewport_height + 1;
-            } else if i < offset {
-                 // This case handles wrapping around from the end to the beginning.
-                *self.state.offset_mut() = i;
+            // If the selection is at or below the bottom of the viewport, scroll down.
+            if i >= offset + row_count {
+                *self.state.offset_mut() = offset + 1;
             }
         }
     }
 
-    // Move selection to the previous row, wrapping around at the beginning.
+    // Move selection to the previous row, halting at the beginning.
     pub fn previous(&mut self) {
         if self.df.is_empty() {
             return;
         }
-        let i = self.state.selected().map_or(0, |i| {
-            if i == 0 {
-                self.df.height() - 1
-            } else {
-                i - 1
-            }
-        });
+        let i = match self.state.selected() {
+            // Halt at the first item
+            Some(i) => i.saturating_sub(1),
+            None => 0,
+        };
         self.state.select(Some(i));
 
-        // --- Manual Scroll Logic ---
-        // If the new selection is outside the viewport, adjust the scroll offset.
         let offset = self.state.offset();
+        // If selection moves above the viewport, scroll up.
         if i < offset {
-            // If selection is above the view, set offset to bring it into view from the top.
-            *self.state.offset_mut() = i;
-        } else if i >= offset + self.viewport_height.saturating_sub(3) {
-            // This case handles wrapping around from the beginning to the end.
-            let viewport_height = self.viewport_height.saturating_sub(3);
-            if viewport_height > 0 {
-                *self.state.offset_mut() = i - viewport_height + 1;
-            }
+            *self.state.offset_mut() = offset - 1;
         }
     }
 
@@ -188,12 +171,11 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
         .map(|h| Cell::from(h.to_string()).style(header_style))
         .collect();
 
-    let header = Row::new(header_cells).height(1).bottom_margin(1);
+    let header = Row::new(header_cells).height(1);
 
-    // --- Lazy Row Generation ---
-    // We only create Rows for the visible part of the DataFrame.
+    // --- Lazy Row Rendering ---
     let start_row = app.state.offset();
-    let row_count = app.viewport_height.saturating_sub(3); // space for header/borders
+    let row_count = app.viewport_height.saturating_sub(3);
     let end_row = (start_row + row_count).min(app.df.height());
 
     let rows: Vec<ratatui::widgets::Row> = (start_row..end_row)
@@ -220,5 +202,28 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
         .highlight_style(selected_style)
         .highlight_symbol(">> ");
 
+    // --- Render with a relative selection and zero offset to fix the double-slice bug ---
+    // Stash the absolute selection and offset.
+    let abs_sel = app.state.selected();
+    let abs_offset = app.state.offset();
+
+    // Compute a relative index for the visible window.
+    let rel_sel = abs_sel.and_then(|s| {
+        if s >= start_row && s < end_row {
+            Some(s - start_row)
+        } else {
+            None
+        }
+    });
+
+    // Temporarily modify state for rendering: set relative selection and zero offset.
+    app.state.select(rel_sel);
+    *app.state.offset_mut() = 0;
+
+    // Render the widget.
     f.render_stateful_widget(table, area, &mut app.state);
+
+    // Restore the original absolute state for the app's own logic.
+    app.state.select(abs_sel);
+    *app.state.offset_mut() = abs_offset;
 }
