@@ -1,12 +1,10 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 use std::net::{IpAddr, ToSocketAddrs};
-use std::io::BufReader;
 use std::fs::File;
 use ipnet::IpNet;
 use hickory_resolver::AsyncResolver;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
-use analyze::{AnalysisType};
 use polars::prelude::*;
 
 /// A simple example of clap
@@ -104,6 +102,13 @@ enum AnalysisCommand {
 
 #[derive(Subcommand)]
 enum Commands {
+    /// Analyze IPv6 addresses from a file
+    Analyze {
+        #[command(subcommand)]
+        command: AnalysisCommand,
+    },
+    /// Discover new targets by scanning the address space
+    Discover,
     /// Generate a set of targets
     Generate {
         /// Number of addresses to generate
@@ -114,8 +119,6 @@ enum Commands {
         #[arg(short = 'u', long)]
         unique: bool,
     },
-    /// Train the TGA
-    Train,
     /// Scan the given address set
     Scan {
         /// Target specification (IP, hostname, or CIDR range)
@@ -186,13 +189,8 @@ enum Commands {
         #[arg(short = 'd', long)]
         dryrun: bool,
     },
-    /// Discover new targets by scanning the address space
-    Discover,
-    /// Analyze IPv6 addresses from a file
-    Analyze {
-        #[command(subcommand)]
-        command: AnalysisCommand,
-    },
+    /// Train the TGA
+    Train,
     /// View data in an interactive TUI
     View {
         /// Path to file containing data to view
@@ -433,12 +431,4 @@ async fn main() {
             }
         }
     }
-}
-
-trait Job {
-    // Run the scan, tga, training, or whatever
-    fn run();
-
-    // Status of the asynchronously running job
-    fn status() -> String;
 }

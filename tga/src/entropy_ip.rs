@@ -1,5 +1,4 @@
 use rand::distributions::{Distribution, WeightedIndex};
-use rand::Rng;
 use std::collections::HashMap;
 
 use crate::IpNetModel;
