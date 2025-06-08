@@ -13,133 +13,102 @@ use ratatui::{
 };
 use std::io;
 
-// The input mode determines how key presses are handled.
-enum InputMode {
-    Normal, // Normal navigation
-    Search, // Typing a search query
-}
-
 // The App struct holds the state of the application.
 struct App {
-    state: TableState,      // State for the table widget (e.g., selected row)
-    df: DataFrame,          // The original, unfiltered DataFrame
-    filtered_df: DataFrame, // The DataFrame after applying the search filter
+    state: TableState,      // State for the table widget (e.g., selected row and offset)
+    df: DataFrame,          // The DataFrame being displayed
     scroll_x: usize,        // Horizontal scroll position
-    input_mode: InputMode,  // The current input mode
-    input: String,          // The current value of the search input
+    viewport_height: usize, // The number of rows visible in the table area
 }
 
 impl App {
     fn new(lf: LazyFrame) -> Self {
         let df = lf.collect().unwrap_or_else(|_| DataFrame::default());
-        let filtered_df = df.clone();
         let mut state = TableState::default();
         // Select the first row if the dataframe is not empty
-        if !filtered_df.is_empty() {
+        if !df.is_empty() {
             state.select(Some(0));
         }
 
         Self {
             state,
             df,
-            filtered_df,
             scroll_x: 0,
-            input_mode: InputMode::Normal,
-            input: String::new(),
+            viewport_height: 0, // Initialized to 0, will be updated on first render
         }
     }
 
-    // Move selection to the next row
+    // Move selection to the next row, wrapping around at the end.
     pub fn next(&mut self) {
-        if self.filtered_df.is_empty() {
+        if self.df.is_empty() {
             return;
         }
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i >= self.filtered_df.height() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
+        let i = self.state.selected().map_or(0, |i| {
+            if i >= self.df.height() - 1 {
+                0
+            } else {
+                i + 1
             }
-            None => 0,
-        };
+        });
         self.state.select(Some(i));
+
+        // --- Manual Scroll Logic ---
+        // If the new selection is outside the viewport, adjust the scroll offset.
+        let viewport_height = self.viewport_height.saturating_sub(3); // Account for borders/header
+        if viewport_height > 0 {
+            let offset = self.state.offset();
+            if i >= offset + viewport_height {
+                // If selection is below the view, set offset to bring it into view from the bottom.
+                *self.state.offset_mut() = i - viewport_height + 1;
+            } else if i < offset {
+                 // This case handles wrapping around from the end to the beginning.
+                *self.state.offset_mut() = i;
+            }
+        }
     }
 
-    // Move selection to the previous row
+    // Move selection to the previous row, wrapping around at the beginning.
     pub fn previous(&mut self) {
-        if self.filtered_df.is_empty() {
+        if self.df.is_empty() {
             return;
         }
-        let i = match self.state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    self.filtered_df.height() - 1
-                } else {
-                    i - 1
-                }
+        let i = self.state.selected().map_or(0, |i| {
+            if i == 0 {
+                self.df.height() - 1
+            } else {
+                i - 1
             }
-            None => 0,
-        };
+        });
         self.state.select(Some(i));
-    }
 
-    // Scroll columns to the right
-    pub fn next_col(&mut self) {
-        if self.scroll_x < self.df.width().saturating_sub(1) {
-            self.scroll_x += 1;
-        }
-    }
-
-    // Scroll columns to the left
-    pub fn previous_col(&mut self) {
-        if self.scroll_x > 0 {
-            self.scroll_x -= 1;
-        }
-    }
-
-    // Apply the search filter to the DataFrame
-    pub fn apply_filter(&mut self) {
-        if self.input.is_empty() {
-            self.filtered_df = self.df.clone();
-        } else {
-            // TODO: Implement proper string filtering
-            // For now, just show all data
-            self.filtered_df = self.df.clone();
-            
-            /* Original filtering code - needs fixing
-            // Create a mask for each column and combine them
-            let mut mask = BooleanChunked::full("mask", false, self.df.height());
-            
-            for col_name in self.df.get_column_names() {
-                let col = self.df.column(col_name).unwrap();
-                if let Ok(str_col) = col.cast(&DataType::String) {
-                    if let Ok(str_col) = str_col.str() {
-                        if let Ok(col_mask) = str_col.contains_literal(self.input.as_str()) {
-                            mask = mask | col_mask;
-                        }
-                    }
-                }
+        // --- Manual Scroll Logic ---
+        // If the new selection is outside the viewport, adjust the scroll offset.
+        let offset = self.state.offset();
+        if i < offset {
+            // If selection is above the view, set offset to bring it into view from the top.
+            *self.state.offset_mut() = i;
+        } else if i >= offset + self.viewport_height.saturating_sub(3) {
+            // This case handles wrapping around from the beginning to the end.
+            let viewport_height = self.viewport_height.saturating_sub(3);
+            if viewport_height > 0 {
+                *self.state.offset_mut() = i - viewport_height + 1;
             }
-
-            // Apply the filter
-            self.filtered_df = self.df.filter(&mask).unwrap_or_else(|_| DataFrame::default());
-            */
         }
+    }
 
-        // Reset selection after filtering
-        if !self.filtered_df.is_empty() {
-            self.state.select(Some(0));
-        } else {
-            self.state.select(None);
-        }
+    // Scroll columns to the right.
+    pub fn next_col(&mut self) {
+        self.scroll_x = self.scroll_x.saturating_add(1).min(self.df.width().saturating_sub(1));
+    }
+
+    // Scroll columns to the left.
+    pub fn previous_col(&mut self) {
+        self.scroll_x = self.scroll_x.saturating_sub(1);
     }
 }
 
 // This function sets up the terminal and runs the main application loop.
 pub fn run_tui(lf: LazyFrame) -> io::Result<()> {
-    // --- Terminal setup ---
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
@@ -149,8 +118,7 @@ pub fn run_tui(lf: LazyFrame) -> io::Result<()> {
     let mut app = App::new(lf);
     let res = run_app(&mut terminal, &mut app);
 
-    // --- Restore terminal ---
-    // This code runs when the app exits, either normally or on error.
+    // This code ensures the terminal is restored to its original state.
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
@@ -160,7 +128,7 @@ pub fn run_tui(lf: LazyFrame) -> io::Result<()> {
     terminal.show_cursor()?;
 
     if let Err(err) = res {
-        println!("{:?}", err)
+        println!("Error: {:?}", err)
     }
 
     Ok(())
@@ -172,32 +140,13 @@ fn run_app<B: Backend>(terminal: &mut Terminal<B>, app: &mut App) -> io::Result<
         terminal.draw(|f| ui(f, app))?;
 
         if let Event::Key(key) = event::read()? {
-            match app.input_mode {
-                InputMode::Normal => match key.code {
-                    KeyCode::Char('q') => return Ok(()),
-                    KeyCode::Char('/') => app.input_mode = InputMode::Search,
-                    KeyCode::Left => app.previous_col(),
-                    KeyCode::Right => app.next_col(),
-                    KeyCode::Down => app.next(),
-                    KeyCode::Up => app.previous(),
-                    _ => {}
-                },
-                InputMode::Search => match key.code {
-                    KeyCode::Enter => {
-                        app.apply_filter();
-                        app.input_mode = InputMode::Normal;
-                    }
-                    KeyCode::Char(c) => app.input.push(c),
-                    KeyCode::Backspace => {
-                        app.input.pop();
-                    }
-                    KeyCode::Esc => {
-                        app.input_mode = InputMode::Normal;
-                        app.input.clear();
-                        app.apply_filter(); // Reset filter on escape
-                    }
-                    _ => {}
-                },
+            match key.code {
+                KeyCode::Char('q') => return Ok(()),
+                KeyCode::Left => app.previous_col(),
+                KeyCode::Right => app.next_col(),
+                KeyCode::Down => app.next(),
+                KeyCode::Up => app.previous(),
+                _ => {}
             }
         }
     }
@@ -213,31 +162,25 @@ fn ui(f: &mut Frame, app: &mut App) {
 
     draw_table(f, app, chunks[0]);
 
-    // Draw either the help message or the search box based on the current mode
-    match app.input_mode {
-        InputMode::Normal => {
-            let help_text = "Use arrow keys to navigate rows/cols, '/' to search, 'q' to quit.";
-            let help_message = Paragraph::new(help_text)
-                .block(Block::default().borders(Borders::ALL).title("Help"));
-            f.render_widget(help_message, chunks[1]);
-        }
-        InputMode::Search => {
-            draw_search_box(f, app, chunks[1]);
-        }
-    }
+    // Display a simple help message.
+    let help_text = "Use arrow keys to navigate rows/cols, 'q' to quit.";
+    let help_message =
+        Paragraph::new(help_text).block(Block::default().borders(Borders::ALL).title("Help"));
+    f.render_widget(help_message, chunks[1]);
 }
 
 // Draws the main data table.
 fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
+    // Update the app's viewport height. This is used by the navigation logic.
+    app.viewport_height = area.height as usize;
+
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
-    let normal_style = Style::default(); // Keep header simple
     let header_style = Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD);
 
-    // Determine how many columns can fit in the visible area.
     let max_cols = (area.width / 20).max(1) as usize;
 
     let header_cells: Vec<Cell> = app
-        .filtered_df
+        .df
         .get_column_names()
         .iter()
         .skip(app.scroll_x)
@@ -245,27 +188,27 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
         .map(|h| Cell::from(h.to_string()).style(header_style))
         .collect();
 
-    let header = Row::new(header_cells)
-        .style(normal_style)
-        .height(1)
-        .bottom_margin(1);
+    let header = Row::new(header_cells).height(1).bottom_margin(1);
 
-    // Create rows from the DataFrame data
-    let rows: Vec<Row> = app
-        .filtered_df
-        .iter()
-        .skip(app.state.offset()) // Use table state offset for scrolling
-        .take(area.height as usize) // Take enough to fill the view
-        .map(|row_tuple| {
-            let cells: Vec<Cell> = row_tuple
+    // --- Lazy Row Generation ---
+    // We only create Rows for the visible part of the DataFrame.
+    let start_row = app.state.offset();
+    let row_count = app.viewport_height.saturating_sub(3); // space for header/borders
+    let end_row = (start_row + row_count).min(app.df.height());
+
+    let rows: Vec<ratatui::widgets::Row> = (start_row..end_row)
+        .map(|i| {
+            let polars_row = app.df.get_row(i).unwrap();
+            let cells: Vec<Cell> = polars_row.0
                 .iter()
                 .skip(app.scroll_x)
                 .take(max_cols)
                 .map(|val| Cell::from(val.to_string()))
                 .collect();
-            Row::new(cells).height(1)
+            ratatui::widgets::Row::new(cells).height(1)
         })
         .collect();
+
 
     let widths = (0..max_cols)
         .map(|_| Constraint::Length(20))
@@ -278,14 +221,4 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
         .highlight_symbol(">> ");
 
     f.render_stateful_widget(table, area, &mut app.state);
-}
-
-// Draws the search input box.
-fn draw_search_box(f: &mut Frame, app: &App, area: Rect) {
-    let input = Paragraph::new(app.input.as_str())
-        .style(Style::default().fg(Color::Yellow))
-        .block(Block::default().borders(Borders::ALL).title("Search"));
-    f.render_widget(input, area);
-    // Show the cursor at the end of the input
-    f.set_cursor(area.x + app.input.len() as u16 + 1, area.y + 1);
 }
