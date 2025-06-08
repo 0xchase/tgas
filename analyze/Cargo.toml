@@ -4,6 +4,15 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-clap = { version = "4.5", features = ["derive"] }
 hashbrown = "0.14"
 indicatif = "0.17"
+polars = { workspace = true, features = ["lazy", "csv", "parquet"]}
+
+plugin    = { path = "../plugin" }
+arrow-array   = { workspace = true }
+arrow-schema  = { workspace = true }
+anyhow        = { workspace = true }
+async-trait   = { workspace = true }
+clap          = { workspace = true }
+inventory     = { workspace = true }
+itertools = "0.12.1"

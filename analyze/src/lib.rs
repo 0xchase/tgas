@@ -3,12 +3,20 @@ use std::net::{IpAddr, Ipv6Addr};
 use std::fmt::Display;
 use std::time::{Duration, Instant};
 use indicatif::{ProgressBar, ProgressStyle};
+use polars::prelude::*;
+use plugin::contracts::{AbsorbField, MyField};
+
+mod entropy_plugin;
 
 mod analysis;
 mod formats;
 
 pub use formats::{IpListIterator, ScanResultIterator, ScanResultRow};
 pub use analysis::{DispersionAnalysis, EntropyAnalysis, StatisticsAnalysis, SubnetAnalysis};
+pub use analysis::statistics::StatisticsResults;
+pub use analysis::dispersion::DispersionResults;
+pub use analysis::entropy::EntropyResults;
+pub use analysis::subnets::SubnetResults;
 
 /// Trait for analysis results that can be printed
 pub trait PrintableResults: Display {
@@ -23,7 +31,7 @@ pub trait Analysis<T> {
     fn absorb(&mut self, value: T);
     
     /// Get the final analysis results
-    fn results(self) -> Self::Results;
+    fn results(&self) -> Self::Results;
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -102,101 +110,60 @@ impl ProgressTracker {
     }
 }
 
-pub fn analyze<R: BufRead>(mut reader: R, analysis_type: AnalysisType, file_size: u64) -> Result<Box<dyn PrintableResults>, IoError> {
-    // Identify format
-    let format = formats::identify_format(&mut reader)?;
-
-    // Process the input based on format and analysis type
-    match (format, analysis_type) {
-        (formats::Format::IpList | formats::Format::ScanResult, analysis_type) => {
-            match analysis_type {
-                AnalysisType::Counts => {
-                    let mut analyzer = StatisticsAnalysis::new();
-                    process_input(reader, format, &mut analyzer, file_size)?;
-                    Ok(Box::new(analyzer.results()))
-                },
-                AnalysisType::Dispersion => {
-                    let mut analyzer = DispersionAnalysis::new();
-                    process_input(reader, format, &mut analyzer, file_size)?;
-                    Ok(Box::new(analyzer.results()))
-                },
-                AnalysisType::Entropy { start_bit, end_bit } => {
-                    let mut analyzer = EntropyAnalysis::new_with_options(start_bit, end_bit);
-                    process_input(reader, format, &mut analyzer, file_size)?;
-                    Ok(Box::new(analyzer.results()))
-                },
-                AnalysisType::Subnets { max_subnets, prefix_length } => {
-                    let mut analyzer = SubnetAnalysis::new_with_options(max_subnets, prefix_length);
-                    process_input(reader, format, &mut analyzer, file_size)?;
-                    Ok(Box::new(analyzer.results()))
-                },
-            }
+pub fn analyze(df: LazyFrame, analysis_type: AnalysisType) -> Result<Box<dyn PrintableResults>, IoError> {
+    // Process the input based on analysis type
+    match analysis_type {
+        AnalysisType::Counts => {
+            let mut analyzer = StatisticsAnalysis::new();
+            let results_df = analyze_dataframe(df, &mut analyzer)?;
+            Ok(Box::new(StatisticsResults::from_dataframe(&results_df)))
         },
-        (formats::Format::Unknown, _) => {
-            Err(IoError::new(
-                std::io::ErrorKind::InvalidData,
-                "Could not determine file format"
-            ))
-        }
+        AnalysisType::Dispersion => {
+            let mut analyzer = DispersionAnalysis::new();
+            let results_df = analyze_dataframe(df, &mut analyzer)?;
+            Ok(Box::new(DispersionResults::from_dataframe(&results_df)))
+        },
+        AnalysisType::Entropy { start_bit, end_bit } => {
+            let mut analyzer = EntropyAnalysis::new_with_options(start_bit, end_bit);
+            let results_df = analyze_dataframe(df, &mut analyzer)?;
+            Ok(Box::new(EntropyResults::from_dataframe(&results_df)))
+        },
+        AnalysisType::Subnets { max_subnets, prefix_length } => {
+            let mut analyzer = SubnetAnalysis::new_with_options(max_subnets, prefix_length);
+            let results_df = analyze_dataframe(df, &mut analyzer)?;
+            Ok(Box::new(SubnetResults::from_dataframe(&results_df)))
+        },
     }
 }
 
-fn process_input<R: BufRead, A: Analysis<Ipv6Addr>>(
-    reader: R,
-    format: formats::Format,
+fn analyze_dataframe<A: AbsorbField<Ipv6Addr>>(
+    df: LazyFrame,
     analyzer: &mut A,
-    file_size: u64,
-) -> Result<(), IoError> {
-    let mut tracker = ProgressTracker::new(
-        file_size,
-        match format {
-            formats::Format::IpList => "addresses",
-            formats::Format::ScanResult => "probe responses",
-            formats::Format::Unknown => "unknown entries",
-        }
-    );
+) -> Result<DataFrame, IoError> {
+    // Collect the DataFrame and iterate over the rows
+    let df = df.collect().map_err(|e| IoError::new(
+        std::io::ErrorKind::InvalidData,
+        format!("Failed to collect DataFrame: {}", e)
+    ))?;
 
-    let result = match format {
-        formats::Format::IpList => {
-            let mut iter = IpListIterator::new(reader);
-            while let Some(result) = iter.next() {
-                match result? {
-                    IpAddr::V6(addr) => {
-                        analyzer.absorb(addr);
-                        tracker.increment(iter.bytes_read());
-                    }
-                    _ => continue, // Skip non-IPv6 addresses
+    // Analyze each column
+    for (col_name, series) in df.get_columns().iter().enumerate() {
+        println!("\nAnalyzing column: {}", col_name);
+        
+        // Convert each value to Ipv6Addr and absorb it
+        for value in series.str().map_err(|e| IoError::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Failed to convert series to string: {}", e)
+        ))? {
+            if let Some(addr_str) = value {
+                if let Ok(addr) = addr_str.parse::<Ipv6Addr>() {
+                    analyzer.absorb(&A::Config::default(), addr);
                 }
             }
-            // Update remaining progress
-            if tracker.count > 0 {
-                tracker.update_progress();
-            }
-            Ok(())
         }
-        formats::Format::ScanResult => {
-            let mut iter = ScanResultIterator::new(reader)?;
-            while let Some(result) = iter.next() {
-                let row = result?;
-                analyzer.absorb(row.address);
-                tracker.increment(iter.bytes_read());
-            }
-            // Update remaining progress
-            if tracker.count > 0 {
-                tracker.update_progress();
-            }
-            Ok(())
-        }
-        formats::Format::Unknown => {
-            Err(IoError::new(
-                std::io::ErrorKind::InvalidData,
-                "Could not determine file format"
-            ))
-        }
-    };
+    }
 
-    tracker.finish(result.is_ok());
-    result
+    Ok(analyzer.finalize())
 }
 
 pub fn print_analysis_result(result: &dyn PrintableResults) {

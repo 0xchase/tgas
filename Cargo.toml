@@ -3,7 +3,20 @@ resolver = "3"
 members = [
 	"analyze",
 	"cli",
+	#"plugin",
 	"scan",
 	"tga",
 	# "xdp"
 ]
+
+[workspace.dependencies]
+arrow-array   = "55.1.0"
+arrow-schema  = "55.1.0"
+anyhow        = "1"
+serde         = { version = "1", features = ["derive"] }
+serde_json    = "1"
+inventory     = { version = "0.3" }
+libloading    = "0.8"
+async-trait = "0.1.88"
+clap = "4.5.39"
+polars = { version = "0.48.1", features = ["lazy", "csv", "parquet"] }

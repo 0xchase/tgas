@@ -1,7 +1,9 @@
 use std::net::Ipv6Addr;
 use std::fmt;
 use hashbrown::HashMap;
-use crate::{Analysis, PrintableResults};
+use polars::prelude::*;
+use crate::PrintableResults;
+use plugin::contracts::AbsorbField;
 
 #[derive(Debug)]
 pub struct StatisticsResults {
@@ -51,13 +53,23 @@ impl StatisticsAnalysis {
             total_count: 0,
         }
     }
+
+    fn get_results(&self) -> StatisticsResults {
+        let unique_count = self.address_counts.len();
+        
+        StatisticsResults {
+            total_count: self.total_count,
+            unique_count,
+            duplicate_count: self.total_count - unique_count,
+        }
+    }
 }
 
-impl Analysis<Ipv6Addr> for StatisticsAnalysis {
-    type Results = StatisticsResults;
+impl AbsorbField<Ipv6Addr> for StatisticsAnalysis {
+    type Config = ();
 
     #[inline(always)]
-    fn absorb(&mut self, addr: Ipv6Addr) {
+    fn absorb(&mut self, _config: &Self::Config, addr: Ipv6Addr) {
         let entry = self.address_counts.raw_entry_mut().from_key(&addr);
         match entry {
             hashbrown::hash_map::RawEntryMut::Occupied(mut o) => {
@@ -71,13 +83,20 @@ impl Analysis<Ipv6Addr> for StatisticsAnalysis {
         self.total_count += 1;
     }
 
-    fn results(self) -> Self::Results {
-        let unique_count = self.address_counts.len();
-        
-        StatisticsResults {
-            total_count: self.total_count,
-            unique_count,
-            duplicate_count: self.total_count - unique_count,
-        }
+    fn finalize(&mut self) -> DataFrame {
+        let results = self.get_results();
+        let total = Column::new("total_count".into(), &[results.total_count as i64]);
+        let unique = Column::new("unique_count".into(), &[results.unique_count as i64]);
+        let duplicate = Column::new("duplicate_count".into(), &[results.duplicate_count as i64]);
+        let ratio = Column::new("duplication_ratio".into(), &[
+            if results.total_count > 0 {
+                (results.duplicate_count as f64 / results.total_count as f64) * 100.0
+            } else {
+                0.0
+            }
+        ]);
+
+        DataFrame::new(vec![total, unique, duplicate, ratio])
+            .expect("Failed to create DataFrame")
     }
 }

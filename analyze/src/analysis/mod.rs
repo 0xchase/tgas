@@ -1,9 +1,9 @@
-mod statistics;
-mod entropy;
-mod dispersion;
-mod subnets;
+pub mod statistics;
+pub mod dispersion;
+pub mod entropy;
+pub mod subnets;
 
-pub use statistics::StatisticsAnalysis;
-pub use entropy::EntropyAnalysis;
-pub use dispersion::DispersionAnalysis;
-pub use subnets::SubnetAnalysis;
+pub use statistics::{StatisticsAnalysis, StatisticsResults};
+pub use dispersion::{DispersionAnalysis, DispersionResults};
+pub use entropy::{EntropyAnalysis, EntropyResults};
+pub use subnets::{SubnetAnalysis, SubnetResults};

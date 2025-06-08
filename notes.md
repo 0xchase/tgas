@@ -11,6 +11,18 @@
 
 ## Ideas
 
+Plugin system
+- Use a build.rs plus an inventory to auto-register plugins
+- Users can `cargo add` a plugin and it will be auto-discovered by the installation
+
+Consider an Arrow/Parquet IO schema?
+Use OpenMetrics + Prometheus to remotely monitor jobs
+Output to various apache arrow types like JSON, CSV, etc
+
+
+Use cargo to generate markdown docs website.
+Beautiful [ratatui](https://ratatui.rs/examples/apps/) user interface
+
 Scan result:
 - dispersion
 - percent live, aliased, response from probed/third-party, etc
@@ -35,46 +47,49 @@ System metrics:
 
 Core Modules
 
-- **analyze**: `analyze`, `visualize`
-  - by default it will identify the file and suggest arguments/flags for the user to pass
-  - **scan output**: parse any zmap or ipv6kit output
-  - **tga model**: parse a tga model file, identify the tga, load the tga, print supported information about it
-  - **address list**: parse an address list
-  - **extract**: Extract elements from a dump per category or other property
-  - something like zesplot
-  - metrics
-  - tables
-  - graphs
-    - graph any property against another property
-      - pre-calculate some properties to make them available
-      - use property types (category/enum, float, int, etc) to decide graph format
-      - line graph, bar chart, pie chart, scatter plot, heatmap
-  - visualizations
+- **view**
+ - View the schema files in various ways
+- **analyze**
+  - *formats*: ip list, scan output, tga model
+  - *commands*:
+    - counts: better print, work for CSV, count by subnets, count CSV property
+    - dispersion: todo
+    - entropy: better print, work for CSV
+    - subnets
+    - graph: zesplot, bar, line, pie, scatter, heatmap, categories, (property vs. property)
   - classify addresses
-- **measurements**: `measure`
+- **filter/extract**
+  - Modifying address lists or scan outputs
+  - merge: merge and interweave two scans, or append two address lists
+  - search: search for contents
+- **measure**
   - measure the bandwidth of an interface
+  - measure maximum scan speed
   - measure cpu/memory usage
-- **geolocation**: `locate`
+- **locate**
   - locate localhost/self using various techniques
   - round-trip-time triangulation (pass three scans to `analyze`)
   - like `ip2trace` combine traceroute with offline database lookup for each hop
   - using BGP and WHOIS data to find the registered owner
-- **scanners**: `scan`
+- **lookup**
+  - reverse DNS lookup
+  - whois lookup
+  - IP to ASN mapping using a service
+- **scan**
   - support stateful, stateless, PF_RING accelerated stateless, and application layer
   - support as many zmap options as possible
   - traceroute
-  - live detection
-  - alias detection
-  - routed detection
   - response from probed address or third-party
   - `--analysis` flag can be passed a list of analysis plugins
   - `--watch` and `--feedback` can show other things
   - *feedback*: live update any analysis
-- **tgas**: `generate`, `train`, `run`
+- **detect**
+  - aliased, live, routed
+- **tgas**: `generate`, `train`, `run`, `discover`
   - some in Rust
   - some in python over `pyo3`
   - *feedback*: live update any analysis
-- **data**: `download`
+- **download**
   - download common data sources
   - BGP, DNS, CDNs, etc.
   - https://opendata.rapid7.com/

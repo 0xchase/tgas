@@ -2,20 +2,22 @@ use std::collections::HashMap;
 use std::net::Ipv6Addr;
 use std::fmt;
 use crate::{Analysis, PrintableResults};
+use polars::prelude::*;
+use plugin::contracts::{AbsorbField, MyField};
+use itertools::Itertools;
 
 #[derive(Debug)]
 pub struct DispersionResults {
-    pub total_count: usize,
-    pub unique_count: usize,
+    pub min_distance: u64,
+    pub max_distance: u64,
     pub avg_distance: f64,
-    pub max_distance: u128,
-    pub coverage_ratio: f64,
+    pub total_pairs: u64,
 }
 
 impl fmt::Display for DispersionResults {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "Total addresses: {}\nUnique addresses: {}\nAverage distance (log2): {:.2}\nMaximum distance: {}\nCoverage ratio: {:.6}", 
-            self.total_count, self.unique_count, self.avg_distance, self.max_distance, self.coverage_ratio)
+            self.total_pairs, self.total_pairs, self.avg_distance, self.max_distance, self.avg_distance)
     }
 }
 
@@ -26,60 +28,53 @@ impl PrintableResults for DispersionResults {
     }
 }
 
+#[derive(Default)]
+pub struct DispersionConfig;
+
 pub struct DispersionAnalysis {
-    address_counts: HashMap<Ipv6Addr, usize>,
-    total_count: usize,
+    addresses: Vec<Ipv6Addr>,
 }
 
 impl DispersionAnalysis {
     pub fn new() -> Self {
         Self {
-            address_counts: HashMap::new(),
-            total_count: 0,
+            addresses: Vec::new(),
         }
     }
+}
 
-    fn calculate_metrics(&self) -> (f64, u128, f64) {
-        let mut addr_nums: Vec<u128> = self.address_counts.keys()
-            .map(|addr| u128::from_be_bytes(addr.octets()))
-            .collect();
-        addr_nums.sort_unstable();
+impl AbsorbField<Ipv6Addr> for DispersionAnalysis {
+    type Config = DispersionConfig;
 
-        if addr_nums.len() <= 1 {
-            return (0.0, 0, 0.0);
+    fn absorb(&mut self, _config: &Self::Config, addr: Ipv6Addr) {
+        self.addresses.push(addr);
+    }
+
+    fn finalize(&mut self) -> DataFrame {
+        // Calculate dispersion metrics
+        let mut distances = Vec::new();
+        for i in 0..self.addresses.len() {
+            for j in (i + 1)..self.addresses.len() {
+                let dist = self.addresses[i].segments()
+                    .iter()
+                    .zip(self.addresses[j].segments().iter())
+                    .map(|(a, b)| (a ^ b).count_ones() as u64)
+                    .sum::<u64>();
+                distances.push(dist);
+            }
         }
 
-        // Calculate average and maximum distance between consecutive addresses
-        let mut total_distance = 0u128;
-        let mut max_distance = 0u128;
-        let mut gaps = Vec::new();
+        // Create DataFrame with dispersion metrics
+        let min_dist = distances.iter().min().unwrap_or(&0);
+        let max_dist = distances.iter().max().unwrap_or(&0);
+        let avg_dist = distances.iter().sum::<u64>() as f64 / distances.len() as f64;
 
-        for window in addr_nums.windows(2) {
-            let distance = window[1] - window[0];
-            total_distance = total_distance.saturating_add(distance);
-            max_distance = max_distance.max(distance);
-            gaps.push(distance);
-        }
-
-        let avg_distance = if gaps.is_empty() {
-            0.0
-        } else {
-            // Use log scale for the average to handle IPv6's huge address space
-            let sum_log_distances: f64 = gaps.iter()
-                .map(|&d| (d as f64).log2())
-                .sum();
-            sum_log_distances / gaps.len() as f64
-        };
-
-        // Calculate coverage ratio (how much of the potential address space is used)
-        let actual_span = addr_nums.last().unwrap() - addr_nums.first().unwrap();
-        let coverage_ratio = if actual_span > 0 {
-            (addr_nums.len() as f64) / (actual_span as f64)
-        } else {
-            0.0
-        };
-
-        (avg_distance, max_distance, coverage_ratio)
+        DataFrame::new(vec![
+            Column::new("min_distance".into(), &[*min_dist]),
+            Column::new("max_distance".into(), &[*max_dist]),
+            Column::new("avg_distance".into(), &[avg_dist]),
+            Column::new("total_pairs".into(), &[distances.len() as u64]),
+        ]).unwrap()
     }
 }
 
@@ -87,20 +82,54 @@ impl Analysis<Ipv6Addr> for DispersionAnalysis {
     type Results = DispersionResults;
 
     fn absorb(&mut self, addr: Ipv6Addr) {
-        *self.address_counts.entry(addr).or_insert(0) += 1;
-        self.total_count += 1;
+        self.addresses.push(addr);
     }
 
     fn results(self) -> Self::Results {
-        let unique_count = self.address_counts.len();
-        let (avg_distance, max_distance, coverage_ratio) = self.calculate_metrics();
+        let min_distance = self.addresses.iter().min().unwrap().segments()
+            .iter()
+            .zip(self.addresses.iter().max().unwrap().segments().iter())
+            .map(|(a, b)| (a ^ b).count_ones() as u64)
+            .sum();
+        let max_distance = self.addresses.iter().max().unwrap().segments()
+            .iter()
+            .zip(self.addresses.iter().min().unwrap().segments().iter())
+            .map(|(a, b)| (a ^ b).count_ones() as u64)
+            .sum();
+        let avg_distance = self.addresses.iter()
+            .flat_map(|addr| addr.segments().iter())
+            .combinations(2)
+            .map(|(a, b)| (a ^ b).count_ones() as f64)
+            .sum::<f64>() / self.addresses.len() as f64;
+        let total_pairs = self.addresses.len() as u64 * (self.addresses.len() - 1) as u64 / 2;
 
         DispersionResults {
-            total_count: self.total_count,
-            unique_count,
-            avg_distance,
+            min_distance,
             max_distance,
-            coverage_ratio,
+            avg_distance,
+            total_pairs,
         }
+    }
+}
+
+impl DispersionResults {
+    pub fn from_dataframe(df: &DataFrame) -> Self {
+        Self {
+            min_distance: df.column("min_distance").unwrap().u64().unwrap().get(0).unwrap(),
+            max_distance: df.column("max_distance").unwrap().u64().unwrap().get(0).unwrap(),
+            avg_distance: df.column("avg_distance").unwrap().f64().unwrap().get(0).unwrap(),
+            total_pairs: df.column("total_pairs").unwrap().u64().unwrap().get(0).unwrap(),
+        }
+    }
+}
+
+impl std::fmt::Display for DispersionResults {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        writeln!(f, "Dispersion Analysis Results:")?;
+        writeln!(f, "  Minimum Distance: {}", self.min_distance)?;
+        writeln!(f, "  Maximum Distance: {}", self.max_distance)?;
+        writeln!(f, "  Average Distance: {:.2}", self.avg_distance)?;
+        writeln!(f, "  Total Address Pairs: {}", self.total_pairs)?;
+        Ok(())
     }
 }

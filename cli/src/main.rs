@@ -7,6 +7,7 @@ use ipnet::IpNet;
 use hickory_resolver::AsyncResolver;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use analyze::{AnalysisType, print_analysis_result};
+use polars::prelude::*;
 
 /// A simple example of clap
 #[derive(Parser)]
@@ -48,18 +49,30 @@ enum AnalysisCommand {
         /// Path to file containing IPv6 addresses
         #[arg(value_name = "FILE")]
         file: PathBuf,
+
+        /// Column name to select from input data
+        #[arg(short = 'f', long, value_name = "FIELD")]
+        field: Option<String>,
     },
     /// Address space dispersion metrics
     Dispersion {
         /// Path to file containing IPv6 addresses
         #[arg(value_name = "FILE")]
         file: PathBuf,
+
+        /// Column name to select from input data
+        #[arg(short = 'f', long, value_name = "FIELD")]
+        field: Option<String>,
     },
     /// Information entropy analysis
     Entropy {
         /// Path to file containing IPv6 addresses
         #[arg(value_name = "FILE")]
         file: PathBuf,
+
+        /// Column name to select from input data
+        #[arg(short = 'f', long, value_name = "FIELD")]
+        field: Option<String>,
 
         /// Start bit position (0-127) for entropy calculation
         #[arg(short = 's', long, value_parser = clap::value_parser!(u8).range(0..=127), default_value_t = 0)]
@@ -74,6 +87,10 @@ enum AnalysisCommand {
         /// Path to file containing IPv6 addresses
         #[arg(value_name = "FILE")]
         file: PathBuf,
+
+        /// Column name to select from input data
+        #[arg(short = 'f', long, value_name = "FIELD")]
+        field: Option<String>,
         
         /// Maximum number of subnets to show (default: 10)
         #[arg(short = 'n', long, value_parser = clap::value_parser!(usize), default_value_t = 10)]
@@ -237,19 +254,31 @@ impl Target {
 
 fn analyze_file(
     file: &PathBuf,
+    field: Option<&str>,
     analysis_type: analyze::AnalysisType,
 ) -> Result<(), String> {
-    let file_size = file
-        .metadata()
-        .map(|m| m.len())
-        .map_err(|e| format!("Failed to get file metadata: {}", e))?;
+    // Try reading as CSV first
+    let df = CsvReader::new(File::open(file)
+        .map_err(|e| format!("Failed to open file: {}", e))?)
+        .finish()
+        .map_err(|e| format!("Failed to parse CSV file: {}", e))
+        .or_else(|_| {
+            // If CSV fails, try Parquet
+            ParquetReader::new(File::open(file)
+                .map_err(|e| format!("Failed to open file: {}", e))?)
+                .finish()
+                .map_err(|e| format!("Failed to parse Parquet file: {}", e))
+        })?;
     
-    let file = File::open(file)
-        .map_err(|e| format!("Failed to open file: {}", e))?;
-    
-    let reader = BufReader::with_capacity(1024, file);
-    
-    match analyze::analyze(reader, analysis_type, file_size) {
+    let df = match field {
+        Some(field) => df
+            .lazy()
+            .select([col(field)]),
+        None => df
+            .lazy()
+    };
+
+    match analyze::analyze(df, analysis_type) {
         Ok(results) => {
             print_analysis_result(&*results);
             Ok(())
@@ -262,19 +291,9 @@ fn analyze_file(
 async fn main() {
     let cli = Cli::parse();
 
-    // Set up logging based on verbosity
-    /*match cli.verbose {
-        0 => println!("Running in quiet mode"),
-        1 => println!("Running with normal verbosity"),
-        2 => println!("Running with increased verbosity"),
-        _ => println!("Running with maximum verbosity"),
-    }*/
-
     if let Some(log_path) = &cli.log {
         println!("Logging to file: {:?}", log_path);
     }
-
-    // println!("Output will be written to: {}", cli.output_file);
 
     match &cli.command {
         Commands::Generate { count, unique } => {
@@ -342,24 +361,24 @@ async fn main() {
         }
         Commands::Analyze { command } => {
             let result = match command {
-                AnalysisCommand::Counts { file } => {
-                    analyze_file(file, analyze::AnalysisType::Counts)
+                AnalysisCommand::Counts { file, field } => {
+                    analyze_file(file, field.as_deref(), analyze::AnalysisType::Counts)
                 },
-                AnalysisCommand::Dispersion { file } => {
-                    analyze_file(file, analyze::AnalysisType::Dispersion)
+                AnalysisCommand::Dispersion { file, field } => {
+                    analyze_file(file, field.as_deref(), analyze::AnalysisType::Dispersion)
                 },
-                AnalysisCommand::Entropy { file, start_bit, end_bit } => {
+                AnalysisCommand::Entropy { file, field, start_bit, end_bit } => {
                     if start_bit >= end_bit {
                         eprintln!("Error: start_bit must be less than end_bit");
                         std::process::exit(1);
                     }
-                    analyze_file(file, analyze::AnalysisType::Entropy {
+                    analyze_file(file, field.as_deref(), analyze::AnalysisType::Entropy {
                         start_bit: *start_bit,
                         end_bit: *end_bit,
                     })
                 },
-                AnalysisCommand::Subnets { file, max_subnets, prefix_length } => {
-                    analyze_file(file, analyze::AnalysisType::Subnets {
+                AnalysisCommand::Subnets { file, field, max_subnets, prefix_length } => {
+                    analyze_file(file, field.as_deref(), analyze::AnalysisType::Subnets {
                         max_subnets: *max_subnets,
                         prefix_length: *prefix_length,
                     })
