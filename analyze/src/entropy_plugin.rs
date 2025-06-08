@@ -2,8 +2,6 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use async_trait::async_trait;
-use arrow_array::{Float64Array, RecordBatch};
-use arrow_schema::{DataType, Schema};
 use clap::{ArgMatches, Parser};
 /*use plugin::{FieldSpec, Plugin, Stage, register_plugin};
 

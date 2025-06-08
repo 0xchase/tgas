@@ -1,4 +1,6 @@
 use clap::{Parser, Subcommand, ValueEnum};
+use comfy_table::{CellAlignment, Row};
+use comfy_table::{Table, ContentArrangement, modifiers::UTF8_ROUND_CORNERS, Attribute, Cell};
 use std::path::PathBuf;
 use std::net::{IpAddr, ToSocketAddrs};
 use std::fs::File;
@@ -6,6 +8,7 @@ use ipnet::IpNet;
 use hickory_resolver::AsyncResolver;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use polars::prelude::*;
+use analyze::{analyze, AnalysisType};
 
 /// A simple example of clap
 #[derive(Parser)]
@@ -97,6 +100,16 @@ enum AnalysisCommand {
         /// CIDR prefix length (default: 64)
         #[arg(short = 'l', long, value_parser = clap::value_parser!(u8).range(1..=128), default_value_t = 64)]
         prefix_length: u8,
+    },
+    /// Special IPv6 address block analysis
+    Special {
+        /// Path to file containing IPv6 addresses
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+
+        /// Column name to select from input data
+        #[arg(short = 'f', long, value_name = "FIELD")]
+        field: Option<String>,
     },
 }
 
@@ -260,39 +273,50 @@ impl Target {
     }
 }
 
-fn analyze_file(
-    file: &PathBuf,
-    field: Option<&str>,
-    analysis_type: analyze::AnalysisType,
-) -> Result<(), String> {
-    // Try reading as CSV first
-    let df = CsvReader::new(File::open(file)
-        .map_err(|e| format!("Failed to open file: {}", e))?)
-        .finish()
-        .map_err(|e| format!("Failed to parse CSV file: {}", e))
-        .or_else(|_| {
-            // If CSV fails, try Parquet
-            ParquetReader::new(File::open(file)
-                .map_err(|e| format!("Failed to open file: {}", e))?)
-                .finish()
-                .map_err(|e| format!("Failed to parse Parquet file: {}", e))
-        })?;
-    
-    let df = match field {
-        Some(field) => df
-            .lazy()
-            .select([col(field)]),
-        None => df
-            .lazy()
-    };
-
-    match analyze::analyze(df, analysis_type) {
-        Ok(results) => {
-            println!("{}", results);
-            Ok(())
+fn format_cell(val: &polars::prelude::AnyValue) -> Cell {
+    match val {
+        AnyValue::Int64(_) | AnyValue::Int32(_) | AnyValue::Int16(_) | AnyValue::Int8(_) |
+        AnyValue::UInt64(_) | AnyValue::UInt32(_) | AnyValue::UInt16(_) | AnyValue::UInt8(_) |
+        AnyValue::Float64(_) | AnyValue::Float32(_) => {
+            Cell::new(val.to_string())
+                .set_alignment(CellAlignment::Right)
         },
-        Err(e) => Err(format!("Analysis failed: {}", e)),
+        AnyValue::String(s) => {
+            Cell::new(s.to_string())
+        }
+        _ => {
+            Cell::new(val.to_string())
+        }
     }
+}
+
+fn print_dataframe(df: &DataFrame) {
+    let mut table = Table::new();
+    table.set_content_arrangement(ContentArrangement::Dynamic);
+    table.load_preset("     ──            ");
+    
+    // Add headers
+    let headers: Vec<Cell> = df
+        .get_column_names()
+        .iter()
+        .map(|s| Cell::new(s)
+            .add_attribute(Attribute::Bold))
+        .collect();
+    table.set_header(headers);
+
+    // Add data rows
+    for i in 0..df.height() {
+        let row = df.get_row(i).unwrap();
+        let row_data: Vec<Cell> = row.0
+            .iter()
+            .map(|val| format_cell(val))
+            .collect();
+
+        table.add_row(row_data);
+    }
+
+    println!("\n");
+    println!("{}", table);
 }
 
 #[tokio::main]
@@ -370,32 +394,38 @@ async fn main() {
         Commands::Analyze { command } => {
             let result = match command {
                 AnalysisCommand::Counts { file, field } => {
-                    analyze_file(file, field.as_deref(), analyze::AnalysisType::Counts)
+                    analyze_file(&file, field, AnalysisType::Counts)
                 },
                 AnalysisCommand::Dispersion { file, field } => {
-                    analyze_file(file, field.as_deref(), analyze::AnalysisType::Dispersion)
+                    analyze_file(&file, field, AnalysisType::Dispersion)
                 },
                 AnalysisCommand::Entropy { file, field, start_bit, end_bit } => {
                     if start_bit >= end_bit {
                         eprintln!("Error: start_bit must be less than end_bit");
                         std::process::exit(1);
                     }
-                    analyze_file(file, field.as_deref(), analyze::AnalysisType::Entropy {
+                    analyze_file(&file, field, AnalysisType::Entropy {
                         start_bit: *start_bit,
                         end_bit: *end_bit,
                     })
                 },
                 AnalysisCommand::Subnets { file, field, max_subnets, prefix_length } => {
-                    analyze_file(file, field.as_deref(), analyze::AnalysisType::Subnets {
+                    analyze_file(&file, field, AnalysisType::Subnets {
                         max_subnets: *max_subnets,
                         prefix_length: *prefix_length,
                     })
                 },
+                AnalysisCommand::Special { file, field } => {
+                    analyze_file(&file, field, AnalysisType::Special)
+                },
             };
 
-            if let Err(e) = result {
-                eprintln!("{}", e);
-                std::process::exit(1);
+            match result {
+                Ok(df) => print_dataframe(&df),
+                Err(e) => {
+                    eprintln!("{}", e);
+                    std::process::exit(1);
+                }
             }
         }
         Commands::View { file, field } => {
@@ -430,5 +460,39 @@ async fn main() {
                 std::process::exit(1);
             }
         }
+    }
+}
+
+fn analyze_file(
+    file: &PathBuf,
+    field: &Option<String>,
+    analysis_type: analyze::AnalysisType,
+) -> Result<DataFrame, String> {
+    // Try reading as CSV first
+    let df = CsvReader::new(File::open(file)
+        .map_err(|e| format!("Failed to open file: {}", e))?)
+        .finish()
+        .map_err(|e| format!("Failed to parse CSV file: {}", e))
+        .or_else(|_| {
+            // If CSV fails, try Parquet
+            ParquetReader::new(File::open(file)
+                .map_err(|e| format!("Failed to open file: {}", e))?)
+                .finish()
+                .map_err(|e| format!("Failed to parse Parquet file: {}", e))
+        })?;
+    
+    let df = match field {
+        Some(field) => df
+            .lazy()
+            .select([col(field)]),
+        None => df
+            .lazy()
+    };
+
+    match analyze::analyze(df, analysis_type) {
+        Ok(results) => {
+            Ok(results)
+        },
+        Err(e) => Err(format!("Analysis failed: {}", e)),
     }
 }

@@ -5,14 +5,16 @@ edition = "2024"
 
 [dependencies]
 hashbrown = "0.14"
-indicatif = "0.17"
-polars = { workspace = true, features = ["lazy", "csv", "parquet"]}
+indicatif = "0.17.7"
+polars = { workspace = true, features = ["lazy", "strings", "dtype-full"] }
 
 plugin    = { path = "../plugin" }
-arrow-array   = { workspace = true }
-arrow-schema  = { workspace = true }
 anyhow        = { workspace = true }
 async-trait   = { workspace = true }
 clap          = { workspace = true }
 inventory     = { workspace = true }
 itertools = "0.12.1"
+ipnet = "2.9.0"
+
+[lib]
+path = "src/lib.rs"

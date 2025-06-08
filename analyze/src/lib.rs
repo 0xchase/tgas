@@ -15,6 +15,8 @@ pub use formats::{IpListIterator, ScanResultIterator, ScanResultRow};
 pub use analysis::{DispersionAnalysis, ShannonEntropyAnalysis, StatisticsAnalysis, SubnetAnalysis};
 pub use analysis::{DispersionResults, ShannonEntropyResults, StatisticsResults, SubnetResults};
 
+use crate::analysis::SpecialAnalysis;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnalysisType {
     /// Basic address counts and statistics (total, unique, duplicates)
@@ -31,6 +33,8 @@ pub enum AnalysisType {
         max_subnets: usize,
         prefix_length: u8,
     },
+    /// Special IPv6 address block analysis
+    Special,
 }
 
 struct ProgressTracker {
@@ -47,7 +51,7 @@ impl ProgressTracker {
         let pb = ProgressBar::new(total_size);
         pb.set_style(
             ProgressStyle::default_bar()
-                .template("{spinner:.green} [{elapsed_precise}] Processed {msg} [{bar:20.cyan/grey}] {bytes}/{total_bytes}")
+                .template("[{elapsed_precise}] Processed {msg} [{bar:20.cyan/grey}] {bytes}/{total_bytes}")
                 .expect("Failed to create progress bar template")
                 .progress_chars("█░")
         );
@@ -109,10 +113,14 @@ pub fn analyze(df: LazyFrame, analysis_type: AnalysisType) -> Result<DataFrame, 
             let mut analyzer = SubnetAnalysis::new_with_options(max_subnets, prefix_length);
             analyze_dataframe(df, &mut analyzer)
         },
+        AnalysisType::Special => {
+            let mut analyzer = SpecialAnalysis::new();
+            analyze_dataframe(df, &mut analyzer)
+        },
     }
 }
 
-fn analyze_dataframe<A: AbsorbField<Ipv6Addr>>(
+pub fn analyze_dataframe<A: AbsorbField<Ipv6Addr>>(
     df: LazyFrame,
     analyzer: &mut A,
 ) -> Result<DataFrame, IoError>
