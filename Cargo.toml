@@ -5,7 +5,7 @@ members = [
 	"cli",
 	#"plugin",
 	"scan",
-	"tga",
+	"tga", "view",
 	# "xdp"
 ]
 

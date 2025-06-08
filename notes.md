@@ -19,7 +19,6 @@ Consider an Arrow/Parquet IO schema?
 Use OpenMetrics + Prometheus to remotely monitor jobs
 Output to various apache arrow types like JSON, CSV, etc
 
-
 Use cargo to generate markdown docs website.
 Beautiful [ratatui](https://ratatui.rs/examples/apps/) user interface
 
@@ -48,6 +47,7 @@ System metrics:
 Core Modules
 
 - **view**
+ - Simple TUI view for interactively browsing and searching a dataframe
  - View the schema files in various ways
 - **analyze**
   - *formats*: ip list, scan output, tga model

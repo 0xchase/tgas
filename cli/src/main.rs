@@ -193,6 +193,16 @@ enum Commands {
         #[command(subcommand)]
         command: AnalysisCommand,
     },
+    /// View data in an interactive TUI
+    View {
+        /// Path to file containing data to view
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+
+        /// Column name to select from input data
+        #[arg(short = 'f', long, value_name = "FIELD")]
+        field: Option<String>,
+    },
 }
 
 #[derive(Debug)]
@@ -387,6 +397,38 @@ async fn main() {
 
             if let Err(e) = result {
                 eprintln!("{}", e);
+                std::process::exit(1);
+            }
+        }
+        Commands::View { file, field } => {
+            // Try reading as CSV first
+            let df = match CsvReader::new(File::open(&file)
+                .map_err(|e| format!("Failed to open file: {}", e)).unwrap())
+                .finish() {
+                    Ok(df) => df,
+                    Err(e) => {
+                        // If CSV fails, try Parquet
+                        ParquetReader::new(File::open(&file)
+                            .map_err(|e| format!("Failed to open file: {}", e)).unwrap())
+                            .finish()
+                            .map_err(|e| format!("Failed to parse Parquet file: {}", e))
+                            .map_err(|e| {
+                                eprintln!("Error: {}", e);
+                                std::process::exit(1);
+                            }).unwrap()
+                    }
+                };
+            
+            let df = match field {
+                Some(field) => df
+                    .lazy()
+                    .select([col(field)]),
+                None => df
+                    .lazy()
+            };
+
+            if let Err(e) = view::run_tui(df) {
+                eprintln!("Error running TUI: {}", e);
                 std::process::exit(1);
             }
         }

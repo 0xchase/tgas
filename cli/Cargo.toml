@@ -17,3 +17,4 @@ polars = { workspace = true, features = ["lazy", "csv", "parquet"]}
 scan = { path = "../scan" }
 tga = { path = "../tga" }
 analyze = { path = "../analyze" }
+view = { path = "../view" }
