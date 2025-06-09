@@ -1,6 +1,5 @@
 // plugin/src/lib.rs
 
-use async_trait::async_trait;
 use clap::{ArgMatches, Command, CommandFactory};
 use polars::prelude::*;
 
@@ -16,7 +15,6 @@ pub type Result<T> = std::result::Result<T, PolarsError>;
 ///
 /// * `I` / `O` remain generic so you can later swap in other inputs/outputs.
 /// * `run` is now async.
-#[async_trait]
 pub trait Plugin<I, O>: Send + Sync + 'static {
     type Config: clap::Parser + Sized + Send + Sync + Default + 'static;
 

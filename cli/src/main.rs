@@ -245,7 +245,7 @@ enum Target {
 }
 
 impl Target {
-    async fn parse(input: &str) -> Result<Self, TargetError> {
+    fn parse(input: &str) -> Result<Self, TargetError> {
         // Try parsing as IP address first
         if let Ok(ip) = input.parse::<IpAddr>() {
             return Ok(Target::SingleIp(ip));
@@ -257,7 +257,7 @@ impl Target {
         }
 
         // Try resolving as hostname
-        let resolver = AsyncResolver::tokio(
+        /*let resolver = AsyncResolver::tokio(
             ResolverConfig::default(),
             ResolverOpts::default(),
         );
@@ -271,7 +271,8 @@ impl Target {
             return Err(TargetError::NoAddressFound);
         }
 
-        Ok(Target::Hostname(input.to_string(), addresses))
+        Ok(Target::Hostname(input.to_string(), addresses))*/
+        todo!()
     }
 }
 
@@ -321,8 +322,7 @@ fn print_dataframe(df: &DataFrame) {
     println!("{}", table);
 }
 
-#[tokio::main]
-async fn main() {
+fn main() {
     let cli = Cli::parse();
 
     if let Some(log_path) = &cli.log {
@@ -358,7 +358,7 @@ async fn main() {
             dryrun,
         } => {
             // Parse the target
-            match Target::parse(target).await {
+            match Target::parse(target) {
                 Ok(Target::SingleIp(ip)) => {
                     println!("Targeting single IP: {}", ip);
                 }
@@ -387,7 +387,7 @@ async fn main() {
             }*/
 
             // TODO: Configure scanner with these parameters
-            scan::test_scan().await;
+            scan::test_scan();
         }
         Commands::Discover => {
             println!("Running 'discover' command");
@@ -396,10 +396,10 @@ async fn main() {
         Commands::Analyze { command } => {
             let result = match command {
                 AnalysisCommand::Counts { file, field } => {
-                    analyze_file(&file, field, AnalysisType::Counts).await
+                    analyze_file(&file, field, AnalysisType::Counts)
                 },
                 AnalysisCommand::Dispersion { file, field } => {
-                    analyze_file(&file, field, AnalysisType::Dispersion).await
+                    analyze_file(&file, field, AnalysisType::Dispersion)
                 },
                 AnalysisCommand::Entropy { file, field, start_bit, end_bit } => {
                     if start_bit >= end_bit {
@@ -409,16 +409,16 @@ async fn main() {
                     analyze_file(&file, field, AnalysisType::Entropy {
                         start_bit: *start_bit,
                         end_bit: *end_bit,
-                    }).await
+                    })
                 },
                 AnalysisCommand::Subnets { file, field, max_subnets, prefix_length } => {
                     analyze_file(&file, field, AnalysisType::Subnets {
                         max_subnets: *max_subnets,
                         prefix_length: *prefix_length,
-                    }).await
+                    })
                 },
                 AnalysisCommand::Special { file, field } => {
-                    analyze_file(&file, field, AnalysisType::Special).await
+                    analyze_file(&file, field, AnalysisType::Special)
                 },
             };
 

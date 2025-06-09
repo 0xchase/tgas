@@ -1,25 +1,14 @@
 use std::fs::File;
 use std::io::{BufRead, Error as IoError};
 use std::net::{Ipv6Addr};
-use std::fmt::Display;
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::time::{Duration, Instant};
-use analyze::analysis::statistics::StatisticsConfig;
 use indicatif::{ProgressBar, ProgressStyle};
-use polars::io::mmap::MmapBytesReader;
 use polars::prelude::*;
 use plugin::contracts::{AbsorbField, MyField};
-use futures::stream::{FuturesUnordered, StreamExt, BoxStream};
-use futures::Stream;
-use rayon::prelude::*;
-use rayon::iter::{ParallelIterator, IntoParallelRefIterator};
-use indicatif::ParallelProgressIterator;
 
 use analyze::analysis::{DispersionAnalysis, ShannonEntropyAnalysis, StatisticsAnalysis, SubnetAnalysis, SpecialAnalysis};
 use analyze::analysis::{DispersionResults, ShannonEntropyResults, StatisticsResults, SubnetResults};
-use tokio::stream;
-use tokio::task::JoinHandle;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnalysisType {
@@ -54,66 +43,58 @@ pub fn open_csv_lazy(file: &PathBuf, field: &Option<String>) -> Result<LazyFrame
         }.with_new_streaming(true))
 }
 
-pub async fn analyze_file(
+pub fn analyze_file(
     file: &PathBuf,
     field: &Option<String>,
     analysis_type: AnalysisType,
 ) -> Result<DataFrame, String> {
-    let lf = open_csv_lazy(file, field)?;
-    tokio::task::spawn_blocking(move | | {
-        let df = lf.collect().map_err(|e| format!("Failed to collect dataframe: {}", e))?;
+    let mut lf = open_csv_lazy(file, field)?;
+    let schema = lf.collect_schema().unwrap();
 
-        match analyze(df, analysis_type) {
-            Ok(results) => {
-                Ok(results)
-            },
-            Err(e) => Err(format!("Analysis failed: {}", e)),
+    /*let file = File::open(file).unwrap();
+    let mut csv_reader = CsvReader::new(file)
+        .with_options(CsvReadOptions::default()
+            .with_infer_schema_length(Some(100))
+            .with_chunk_size(100000));
+    
+    let mut batches = csv_reader.batched_borrowed().unwrap();
+
+    let mut total_df = DataFrame::default();
+    let mut chunks = Vec::new();
+    while let Ok(batch) = batches.next_batches(8) {
+        if let Some(batch) = batch {
+            println!("{}", batch.len());
+            chunks.push(batch);
         }
-    }).await.unwrap()
-}
+    }*/
 
-fn analyze_column3(s: Column) -> DataFrame {
-    let name = s.name().to_string();
-    let mean = s.f64().unwrap().mean().unwrap_or(f64::NAN);
-    df! { "column" => &[name], "mean" => &[mean] }.unwrap()
-}
+    // println!("{}", chunks.len());
 
-/// Build a Stream of JoinHandle<DataFrame> for each column in the LazyFrame
-async fn column_analysis_handles3(
-    lf: LazyFrame
-) -> PolarsResult<BoxStream<'static, JoinHandle<DataFrame>>> {
-    // 1) Collect on blocking pool
-    let df = tokio::task::spawn_blocking(move || lf.collect().unwrap())
-        .await
-        .unwrap();
 
-    // 2) Hand the Vec<Series> into our generic spawner
-    let handles = spawn_tasks_stream(df.get_columns().to_vec(), analyze_column3);
-    Ok(handles)
-}
 
-fn spawn_tasks_stream<I, T, F>(inputs: I, worker: F) 
-    -> BoxStream<'static, JoinHandle<T>>
-where
-    I: IntoIterator + Send + 'static,
-    I::IntoIter: Send + 'static,
-    I::Item: Send + 'static,
-    T: Send + 'static,
-    F: Fn(I::Item) -> T + Send + Sync + 'static + Clone,
-{
-    futures::stream::iter(inputs.into_iter())
-        .map(move |item| {
-            // spawn_blocking because we assume `worker` is CPU-bound
-            tokio::task::spawn_blocking({
-                let worker = worker.clone();
-                move || worker(item)
-            })
-        })
-        .boxed()
-}
+    let mut names = Vec::new();
 
-pub fn absorb_series<C, T: MyField, A: AbsorbField<T, Config = C>>(analyzer: &mut A, series: &Series) -> Result<T, IoError> {
-    todo!()
+    // Collect all the columns that have an analysis
+    for (name, dtype) in schema.iter() {
+        if dtype == &DataType::String {
+            names.push(name.to_string());
+        }
+    }
+
+    // Build an expression for the columns
+    let expr = names
+        .iter()
+        .map(|name| col(name.to_string()))
+        .collect::<Vec<_>>();
+
+    let df = lf.select(expr).collect().unwrap();
+
+    match analyze(df, analysis_type) {
+        Ok(results) => {
+            Ok(results)
+        },
+        Err(e) => Err(format!("Analysis failed: {}", e)),
+    }
 }
 
 struct ProgressTracker {
@@ -174,27 +155,27 @@ impl ProgressTracker {
     }
 }
 
-pub fn analyze(df: DataFrame, analysis_type: AnalysisType) -> Result<DataFrame, IoError> {
+pub fn analyze(lf: DataFrame, analysis_type: AnalysisType) -> Result<DataFrame, IoError> {
     match analysis_type {
         AnalysisType::Counts => {
             let mut analyzer = StatisticsAnalysis::new();
-            analyze_dataframe(df, &mut analyzer)
+            analyze_dataframe(lf, &mut analyzer)
         },
         AnalysisType::Dispersion => {
             let mut analyzer = DispersionAnalysis::new();
-            analyze_dataframe(df, &mut analyzer)
+            analyze_dataframe(lf, &mut analyzer)
         },
         AnalysisType::Entropy { start_bit, end_bit } => {
             let mut analyzer = ShannonEntropyAnalysis::new_with_options(start_bit, end_bit);
-            analyze_dataframe(df, &mut analyzer)
+            analyze_dataframe(lf, &mut analyzer)
         },
         AnalysisType::Subnets { max_subnets, prefix_length } => {
             let mut analyzer = SubnetAnalysis::new_with_options(max_subnets, prefix_length);
-            analyze_dataframe(df, &mut analyzer)
+            analyze_dataframe(lf, &mut analyzer)
         },
         AnalysisType::Special => {
             let mut analyzer = SpecialAnalysis::new();
-            analyze_dataframe(df, &mut analyzer)
+            analyze_dataframe(lf, &mut analyzer)
         },
     }
 }
@@ -204,14 +185,8 @@ pub fn analyze_dataframe<A: AbsorbField<Ipv6Addr>>(
     analyzer: &mut A,
 ) -> Result<DataFrame, IoError>
 {
-    println!("Collecting schema...");
-
-    for series in df.iter() {
-        for item in series.phys_iter() {
-            if let Ok(addr) = item.str_value().parse::<Ipv6Addr>() {
-                analyzer.absorb(addr);
-            }
-        }
+    for series in df.get_columns() {
+        analyze_column(series, analyzer, df.height())?;
     }
 
     Ok(analyzer.finalize())
@@ -222,23 +197,21 @@ fn analyze_column<A: AbsorbField<Ipv6Addr>>(
     analyzer: &mut A,
     total_rows: usize,
 ) -> Result<(), IoError>
-where
-    A::Config: Default,
 {
     let mut tracker = ProgressTracker::new(total_rows as u64, "addresses");
-    
-    match series.dtype() {
-        DataType::String => {
-            for item in series.phys_iter() {
-                if let Ok(addr) = item.str_value().parse::<Ipv6Addr>() {
-                    analyzer.absorb( addr);
-                }
-                tracker.increment(tracker.count as u64);
+    for item in series.str().map_err(|e| IoError::new(
+        std::io::ErrorKind::InvalidData,
+        format!("Failed to convert series to string: {}", e)
+    ))? {
+        if let Some(addr_str) = item {
+            if let Ok(addr) = addr_str.parse::<Ipv6Addr>() {
+                analyzer.absorb(addr);
             }
-        }
-        _ => ()
-    }
 
+            tracker.increment(tracker.count as u64);
+        }
+    }
+    
     tracker.finish(true);
     Ok(())
 }

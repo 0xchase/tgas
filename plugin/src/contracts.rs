@@ -1,4 +1,3 @@
-use async_trait::async_trait;
 use polars::prelude::*;
 use clap::{ArgMatches, Parser};
 use std::net::{IpAddr, Ipv6Addr};
@@ -71,7 +70,6 @@ pub trait Categorizer: Plugin<Series, Series> {
 }
 
 /// A plugin that generates data from nothing
-#[async_trait]
 pub trait Generator: Plugin<(), Series> {
     /// The name of the series to generate
     const SERIES_NAME: &'static str;

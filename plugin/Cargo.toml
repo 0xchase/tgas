@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 anyhow        = { workspace = true }
-async-trait   = { workspace = true }
 clap          = { workspace = true }
 inventory     = { workspace = true }
 polars        = { workspace = true }
