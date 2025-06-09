@@ -320,6 +320,7 @@ fn print_dataframe(df: &DataFrame) {
 
     println!("\n");
     println!("{}", table);
+    println!("\n");
 }
 
 fn main() {
@@ -423,7 +424,7 @@ fn main() {
             };
 
             match result {
-                Ok(df) => print_dataframe(&df),
+                Ok(df) => (),
                 Err(e) => {
                     eprintln!("{}", e);
                     std::process::exit(1);

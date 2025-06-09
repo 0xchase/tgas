@@ -47,7 +47,7 @@ pub fn analyze_file(
     file: &PathBuf,
     field: &Option<String>,
     analysis_type: AnalysisType,
-) -> Result<DataFrame, String> {
+) -> Result<(), String> {
     let mut lf = open_csv_lazy(file, field)?;
     let schema = lf.collect_schema().unwrap();
 
@@ -71,10 +71,8 @@ pub fn analyze_file(
     // println!("{}", chunks.len());
 
 
-
-    let mut names = Vec::new();
-
     // Collect all the columns that have an analysis
+    let mut names = Vec::new();
     for (name, dtype) in schema.iter() {
         if dtype == &DataType::String {
             names.push(name.to_string());
@@ -90,9 +88,7 @@ pub fn analyze_file(
     let df = lf.select(expr).collect().unwrap();
 
     match analyze(df, analysis_type) {
-        Ok(results) => {
-            Ok(results)
-        },
+        Ok(results) => Ok(()),
         Err(e) => Err(format!("Analysis failed: {}", e)),
     }
 }
@@ -155,41 +151,51 @@ impl ProgressTracker {
     }
 }
 
-pub fn analyze(lf: DataFrame, analysis_type: AnalysisType) -> Result<DataFrame, IoError> {
+pub fn analyze(df: DataFrame, analysis_type: AnalysisType) -> Result<(), IoError> {
     match analysis_type {
         AnalysisType::Counts => {
-            let mut analyzer = StatisticsAnalysis::new();
-            analyze_dataframe(lf, &mut analyzer)
+            for series in df.get_columns() {
+                let mut analyzer = StatisticsAnalysis::new();
+                analyze_column(series, &mut analyzer, df.height())?;
+                let output = analyzer.finalize();
+                crate::print_dataframe(&output);
+            }
         },
         AnalysisType::Dispersion => {
-            let mut analyzer = DispersionAnalysis::new();
-            analyze_dataframe(lf, &mut analyzer)
+            for series in df.get_columns() {
+                let mut analyzer = DispersionAnalysis::new();
+                analyze_column(series, &mut analyzer, df.height())?;
+                let output = analyzer.finalize();
+                crate::print_dataframe(&output);
+            }
         },
         AnalysisType::Entropy { start_bit, end_bit } => {
-            let mut analyzer = ShannonEntropyAnalysis::new_with_options(start_bit, end_bit);
-            analyze_dataframe(lf, &mut analyzer)
+            for series in df.get_columns() {
+                let mut analyzer = ShannonEntropyAnalysis::new_with_options(start_bit, end_bit);
+                analyze_column(series, &mut analyzer, df.height())?;
+                let output = analyzer.finalize();
+                crate::print_dataframe(&output);
+            }
         },
         AnalysisType::Subnets { max_subnets, prefix_length } => {
-            let mut analyzer = SubnetAnalysis::new_with_options(max_subnets, prefix_length);
-            analyze_dataframe(lf, &mut analyzer)
+            for series in df.get_columns() {
+                let mut analyzer = SubnetAnalysis::new_with_options(max_subnets, prefix_length);
+                analyze_column(series, &mut analyzer, df.height())?;
+                let output = analyzer.finalize();
+                crate::print_dataframe(&output);
+            }
         },
         AnalysisType::Special => {
-            let mut analyzer = SpecialAnalysis::new();
-            analyze_dataframe(lf, &mut analyzer)
+            for series in df.get_columns() {
+                let mut analyzer = SpecialAnalysis::new();
+                analyze_column(series, &mut analyzer, df.height())?;
+                let output = analyzer.finalize();
+                crate::print_dataframe(&output);
+            }
         },
     }
-}
 
-pub fn analyze_dataframe<A: AbsorbField<Ipv6Addr>>(
-    df: DataFrame,
-    analyzer: &mut A,
-) -> Result<DataFrame, IoError>
-{
-    for series in df.get_columns() {
-        analyze_column(series, analyzer, df.height())?;
-    }
-
-    Ok(analyzer.finalize())
+    Ok(())
 }
 
 fn analyze_column<A: AbsorbField<Ipv6Addr>>(
