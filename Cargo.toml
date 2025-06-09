@@ -20,3 +20,4 @@ libloading    = "0.8"
 async-trait = "0.1.88"
 clap = "4.5.39"
 polars = { version = "0.48.1", features = ["lazy", "csv", "parquet"] }
+futures = "0.3"

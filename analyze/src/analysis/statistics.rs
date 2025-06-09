@@ -24,7 +24,7 @@ impl StatisticsAnalysis {
 impl AbsorbField<Ipv6Addr> for StatisticsAnalysis {
     type Config = StatisticsConfig;
 
-    fn absorb(&mut self, _config: &Self::Config, addr: Ipv6Addr) {
+    fn absorb(&mut self, addr: Ipv6Addr) {
         *self.address_counts.entry(addr).or_insert(0) += 1;
         self.total_count += 1;
     }

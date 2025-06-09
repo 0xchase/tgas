@@ -9,16 +9,9 @@ pub struct ShannonEntropyConfig {
     pub end_bit: u8,
 }
 
-impl Default for ShannonEntropyConfig {
-    fn default() -> Self {
-        Self {
-            start_bit: 0,
-            end_bit: 128,
-        }
-    }
-}
-
 pub struct ShannonEntropyAnalysis {
+    start_bit: u8,
+    end_bit: u8,
     bit_counts: HashMap<u8, usize>,
     total_bits: usize,
 }
@@ -26,6 +19,8 @@ pub struct ShannonEntropyAnalysis {
 impl ShannonEntropyAnalysis {
     pub fn new_with_options(start_bit: u8, end_bit: u8) -> Self {
         Self {
+            start_bit,
+            end_bit,
             bit_counts: HashMap::new(),
             total_bits: 0,
         }
@@ -35,9 +30,9 @@ impl ShannonEntropyAnalysis {
 impl AbsorbField<Ipv6Addr> for ShannonEntropyAnalysis {
     type Config = ShannonEntropyConfig;
 
-    fn absorb(&mut self, config: &Self::Config, addr: Ipv6Addr) {
+    fn absorb(&mut self, addr: Ipv6Addr) {
         let bytes = addr.octets();
-        for i in config.start_bit..config.end_bit {
+        for i in self.start_bit..self.end_bit {
             let byte_idx = (i / 8) as usize;
             let bit_idx = i % 8;
             if byte_idx < bytes.len() {

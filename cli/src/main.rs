@@ -8,7 +8,9 @@ use ipnet::IpNet;
 use hickory_resolver::AsyncResolver;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use polars::prelude::*;
-use analyze::{analyze, AnalysisType};
+use analyze::{analyze, AnalysisType, analyze_file};
+
+mod analyze;
 
 /// A simple example of clap
 #[derive(Parser)]
@@ -394,10 +396,10 @@ async fn main() {
         Commands::Analyze { command } => {
             let result = match command {
                 AnalysisCommand::Counts { file, field } => {
-                    analyze_file(&file, field, AnalysisType::Counts)
+                    analyze_file(&file, field, AnalysisType::Counts).await
                 },
                 AnalysisCommand::Dispersion { file, field } => {
-                    analyze_file(&file, field, AnalysisType::Dispersion)
+                    analyze_file(&file, field, AnalysisType::Dispersion).await
                 },
                 AnalysisCommand::Entropy { file, field, start_bit, end_bit } => {
                     if start_bit >= end_bit {
@@ -407,16 +409,16 @@ async fn main() {
                     analyze_file(&file, field, AnalysisType::Entropy {
                         start_bit: *start_bit,
                         end_bit: *end_bit,
-                    })
+                    }).await
                 },
                 AnalysisCommand::Subnets { file, field, max_subnets, prefix_length } => {
                     analyze_file(&file, field, AnalysisType::Subnets {
                         max_subnets: *max_subnets,
                         prefix_length: *prefix_length,
-                    })
+                    }).await
                 },
                 AnalysisCommand::Special { file, field } => {
-                    analyze_file(&file, field, AnalysisType::Special)
+                    analyze_file(&file, field, AnalysisType::Special).await
                 },
             };
 
@@ -460,39 +462,5 @@ async fn main() {
                 std::process::exit(1);
             }
         }
-    }
-}
-
-fn analyze_file(
-    file: &PathBuf,
-    field: &Option<String>,
-    analysis_type: analyze::AnalysisType,
-) -> Result<DataFrame, String> {
-    // Try reading as CSV first
-    let df = CsvReader::new(File::open(file)
-        .map_err(|e| format!("Failed to open file: {}", e))?)
-        .finish()
-        .map_err(|e| format!("Failed to parse CSV file: {}", e))
-        .or_else(|_| {
-            // If CSV fails, try Parquet
-            ParquetReader::new(File::open(file)
-                .map_err(|e| format!("Failed to open file: {}", e))?)
-                .finish()
-                .map_err(|e| format!("Failed to parse Parquet file: {}", e))
-        })?;
-    
-    let df = match field {
-        Some(field) => df
-            .lazy()
-            .select([col(field)]),
-        None => df
-            .lazy()
-    };
-
-    match analyze::analyze(df, analysis_type) {
-        Ok(results) => {
-            Ok(results)
-        },
-        Err(e) => Err(format!("Analysis failed: {}", e)),
     }
 }

@@ -38,8 +38,8 @@ impl SubnetAnalysis {
 impl AbsorbField<Ipv6Addr> for SubnetAnalysis {
     type Config = SubnetConfig;
 
-    fn absorb(&mut self, config: &Self::Config, addr: Ipv6Addr) {
-        let subnet = format!("{}/{}", addr, config.prefix_length);
+    fn absorb(&mut self, addr: Ipv6Addr) {
+        let subnet = format!("{}/{}", addr, self.prefix_length);
         *self.subnet_counts.entry(subnet).or_insert(0) += 1;
     }
 

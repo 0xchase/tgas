@@ -51,7 +51,7 @@ impl DispersionAnalysis {
 impl AbsorbField<Ipv6Addr> for DispersionAnalysis {
     type Config = DispersionConfig;
 
-    fn absorb(&mut self, _config: &Self::Config, addr: Ipv6Addr) {
+    fn absorb(&mut self, addr: Ipv6Addr) {
         self.addresses.push(addr);
     }
 

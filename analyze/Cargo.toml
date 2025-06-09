@@ -5,7 +5,6 @@ edition = "2024"
 
 [dependencies]
 hashbrown = "0.14"
-indicatif = "0.17.7"
 polars = { workspace = true, features = ["lazy", "strings", "dtype-full"] }
 
 plugin    = { path = "../plugin" }
@@ -13,6 +12,7 @@ anyhow        = { workspace = true }
 async-trait   = { workspace = true }
 clap          = { workspace = true }
 inventory     = { workspace = true }
+futures = { workspace = true }
 itertools = "0.12.1"
 ipnet = "2.9.0"
 

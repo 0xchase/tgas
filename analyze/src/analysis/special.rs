@@ -5,38 +5,37 @@ use plugin::contracts::AbsorbField;
 use ipnet::Ipv6Net;
 
 // Static list of special IPv6 address blocks
-const SPECIAL_BLOCKS: &[(&str, &str, &str)] = &[
-    ("::1/128", "Loopback Address", "Local loopback address (localhost)"),
-    ("::/128", "Unspecified Address", "Unspecified address, used as source when no address is available"),
-    ("::ffff:0:0/96", "IPv4-mapped Address", "IPv4 addresses mapped into IPv6 address space"),
-    ("64:ff9b::/96", "IPv4-IPv6 Translation", "IPv4/IPv6 translation address block"),
-    ("64:ff9b:1::/48", "IPv4-IPv6 Translation", "Extended IPv4/IPv6 translation address block"),
-    ("100::/64", "Discard-Only Address Block", "Address block for discarding packets"),
-    ("100:0:0:1::/64", "Dummy IPv6 Prefix", "Dummy prefix for testing and documentation"),
-    ("2001::/23", "IETF Protocol Assignments", "Address block for IETF protocol assignments"),
-    ("2001::/32", "TEREDO", "Teredo tunneling service for IPv6 over IPv4"),
-    ("2001:1::1/128", "Port Control Protocol Anycast", "Anycast address for Port Control Protocol"),
-    ("2001:1::2/128", "TURN Anycast", "Anycast address for Traversal Using Relays around NAT"),
-    ("2001:1::3/128", "DNS-SD Anycast", "Anycast address for DNS Service Discovery"),
-    ("2001:2::/48", "Benchmarking", "Address block for network benchmarking"),
-    ("2001:3::/32", "AMT", "Automatic Multicast Tunneling service"),
-    ("2001:4:112::/48", "AS112-v6", "IPv6 addresses for AS112 DNS service"),
-    ("2001:10::/28", "Deprecated ORCHID", "Deprecated Overlay Routable Cryptographic Hash Identifiers"),
-    ("2001:20::/28", "ORCHIDv2", "Current version of Overlay Routable Cryptographic Hash Identifiers"),
-    ("2001:30::/28", "Drone Remote ID", "Address block for Drone Remote ID Protocol Entity Tags"),
-    ("2001:db8::/32", "Documentation", "Address block for documentation and examples"),
-    ("2002::/16", "6to4", "6to4 automatic tunneling service"),
-    ("2620:4f:8000::/48", "Direct Delegation AS112", "Direct delegation AS112 DNS service"),
-    ("3fff::/20", "Documentation", "Address block for documentation and examples"),
-    ("5f00::/16", "Segment Routing", "Segment Routing (SRv6) SIDs address block"),
-    ("fc00::/7", "Unique-Local", "Unique Local Addresses (ULA) for private networks"),
-    ("fe80::/10", "Link-Local", "Link-Local Unicast addresses for local network communication"),
+const SPECIAL_BLOCKS: &[(&str, &str)] = &[
+    ("::1/128", "Loopback"),
+    ("::/128", "Unspecified"),
+    ("::ffff:0:0/96", "IPv4-Mapped"),
+    ("64:ff9b::/96", "IPv4 to IPv6"),
+    ("64:ff9b:1::/48", "Extended IPv4-IPv6 Translation"),
+    ("100::/64", "Discard-Only"),
+    ("100:0:0:1::/64", "Dummy Prefix"),
+    ("2001::/23", "IETF Protocol"),
+    ("2001::/32", "Teredo"),
+    ("2001:1::1/128", "Port Control Protocol"),
+    ("2001:1::2/128", "TURN"),
+    ("2001:1::3/128", "DNS-SD"),
+    ("2001:2::/48", "Benchmarking"),
+    ("2001:3::/32", "AMT"),
+    ("2001:4:112::/48", "AS112-v6"),
+    ("2001:10::/28", "Deprecated ORCHID"),
+    ("2001:20::/28", "ORCHIDv2"),
+    ("2001:30::/28", "Drone Remote ID"),
+    ("2002::/16", "IPv6 to IPv4"),
+    ("2620:4f:8000::/48", "Direct AS112"),
+    ("2001:db8::/32", "Documentation"),
+    ("3fff::/20", "Documentation"),
+    ("5f00::/16", "Segment Routing"),
+    ("fc00::/7", "Unique Local"),
+    ("fe80::/10", "Link Local"),
 ];
 
 #[derive(Debug, Clone)]
 pub struct SpecialAddressBlock {
     name: String,
-    description: String,
     network: Ipv6Net,
 }
 
@@ -58,10 +57,9 @@ impl SpecialAnalysis {
         let mut blocks = HashMap::new();
         
         // Build blocks from the static list
-        for (prefix, name, description) in SPECIAL_BLOCKS {
+        for (prefix, name) in SPECIAL_BLOCKS {
             blocks.insert(prefix.to_string(), SpecialAddressBlock {
                 name: name.to_string(),
-                description: description.to_string(),
                 network: prefix.parse().unwrap(),
             });
         }
@@ -86,32 +84,34 @@ impl SpecialAnalysis {
 impl AbsorbField<Ipv6Addr> for SpecialAnalysis {
     type Config = ();
 
-    fn absorb(&mut self, _config: &Self::Config, addr: Ipv6Addr) {
+    fn absorb(&mut self, addr: Ipv6Addr) {
         if let Some(block) = self.matches_block(addr) {
             *self.counts.entry(block.name.clone()).or_insert(0) += 1;
         }
     }
 
     fn finalize(&mut self) -> DataFrame {
+        let mut prefixes = Vec::new();
         let mut block_names = Vec::new();
         let mut counts = Vec::new();
-        let mut descriptions = Vec::new();
 
         // Only include blocks that have at least one match
         for block in self.blocks.values() {
             if let Some(&count) = self.counts.get(&block.name) {
                 if count > 0 {
+                    prefixes.push(block.network.to_string());
                     block_names.push(block.name.clone());
                     counts.push(count as u64);
-                    descriptions.push(block.description.clone());
                 }
             }
         }
 
+        let sort_options = SortMultipleOptions::default().with_order_descending(true);
+
         DataFrame::new(vec![
+            Column::new(PlSmallStr::from("Prefix"), prefixes),
             Column::new(PlSmallStr::from("Name"), block_names),
             Column::new(PlSmallStr::from("Count"), counts),
-            Column::new(PlSmallStr::from("Description"), descriptions),
-        ]).unwrap()
+        ]).unwrap().sort(vec!["Count"], sort_options).unwrap()
     }
 }

@@ -98,55 +98,19 @@ impl MyField for Ipv6Addr {
     }
 }
 
-
 pub trait AbsorbField<T: MyField> {
     type Config;
 
-    fn absorb(&mut self, config: &Self::Config, item: T);
+    fn absorb(&mut self, item: T);
     fn finalize(&mut self) -> DataFrame;
 
-    fn absorb_series(&mut self, config: &Self::Config, series: Series) -> DataFrame {
+    fn absorb_series(&mut self, series: &Series) -> DataFrame {
         for item in series.iter() {
             let item = item.cast(&T::FIELD_TYPE);
             let item = T::from_any_value(item);
-            self.absorb(config, item);
+            self.absorb(item);
         }
 
         self.finalize()
     }
-}
-
-// derive clap parser result
-#[derive(Parser)]
-struct ShannonEntropyConfig {
-    /// Start bit position (0-127) for entropy calculation
-    #[arg(short = 's', long, value_parser = clap::value_parser!(u8).range(0..=127), default_value_t = 0)]
-    start_bit: u8,
-
-    /// End bit position (1-128) for entropy calculation
-    #[arg(short = 'e', long, value_parser = clap::value_parser!(u8).range(1..=128), default_value_t = 128)]
-    end_bit: u8,
-}
-
-
-struct ShannonEntropy {
-    pub entropy: f64,
-}
-
-impl AbsorbField<Ipv6Addr> for ShannonEntropy {
-    type Config = ShannonEntropyConfig;
-
-    fn absorb(&mut self, config: &Self::Config, item: Ipv6Addr) {
-        let bytes: [u8; 16] = item.octets();
-        self.entropy += bytes.iter().map(|b| b.count_ones() as f64).sum::<f64>() / 128.0;
-    }
-
-    fn finalize(&mut self) -> DataFrame {
-        // AnyValue::Float64(self.entropy)
-        todo!()
-    }
-}
-
-struct Dispersion {
-    pub dispersion: f64,
 }
