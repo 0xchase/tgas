@@ -1,8 +1,8 @@
-use std::collections::HashMap;
 use std::net::Ipv6Addr;
 use polars::prelude::*;
 use plugin::contracts::Predicate;
-use indicatif::{ProgressBar, ProgressStyle};
+use indicatif::{ProgressBar, ProgressStyle, ParallelProgressIterator};
+use rayon::prelude::*;
 use crate::analysis::predicates::*;
 
 pub struct CountAnalysis {
@@ -15,6 +15,15 @@ impl CountAnalysis {
     }
 
     pub fn analyze(&self, series: &Series) -> Result<DataFrame, Box<dyn std::error::Error>> {
+        // Configure rayon to use up to 8 threads
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(8)
+            .build_global()
+            .unwrap_or_else(|_| {
+                // If global pool is already initialized, just continue
+                eprintln!("Warning: Could not set thread pool size (may already be initialized)");
+            });
+
         let all_predicates = self.get_all_predicates();
         let predicates_to_run = if let Some(ref name) = self.predicate_name {
             all_predicates
@@ -39,9 +48,9 @@ impl CountAnalysis {
         let parse_pb = ProgressBar::new(utf8_series.len() as u64);
         parse_pb.set_style(
             ProgressStyle::default_bar()
-                .template("[{elapsed_precise}] Parsing IP addresses [{bar:40.cyan/blue}] {pos}/{len} ({eta})")
+                .template("[{elapsed_precise}] {msg} [{bar:20.cyan/grey}] {pos}/{len}")
                 .expect("Failed to create progress bar template")
-                .progress_chars("#>-")
+                .progress_chars("█░")
         );
         parse_pb.set_message("Parsing IPv6 addresses...");
 
@@ -77,38 +86,39 @@ impl CountAnalysis {
             ])?);
         }
 
-        // --- 3. Apply Predicates and Aggregate Results ---
-        let mut results = Vec::new();
-        
+        // --- 3. Apply Predicates and Aggregate Results (Parallel) ---
         // Create progress bar for predicate evaluation
         let eval_pb = ProgressBar::new(predicates_to_run.len() as u64);
         eval_pb.set_style(
             ProgressStyle::default_bar()
-                .template("[{elapsed_precise}] Evaluating predicates [{bar:40.green/yellow}] {pos}/{len} ({eta})")
+                .template("[{elapsed_precise}] {msg} [{bar:20.cyan/grey}] {pos}/{len}")
                 .expect("Failed to create progress bar template")
-                .progress_chars("#>-")
+                .progress_chars("█░")
         );
         eval_pb.set_message("Evaluating predicates...");
 
-        for (pred_idx, (name, predicate_fn)) in predicates_to_run.iter().enumerate() {
-            // Apply the predicate function to the parsed IP series.
-            let count = parsed_ips.iter()
-                .filter_map(|opt_addr| opt_addr.as_ref())
-                .filter(|addr| predicate_fn(**addr))
-                .count() as i64;
+        // Convert parsed_ips to Arc for sharing across threads
+        let parsed_ips_arc = std::sync::Arc::new(parsed_ips);
+        
+        let results: Vec<(String, i64, i64, f64)> = predicates_to_run
+            .par_iter()
+            .progress_with(eval_pb)
+            .map(|(name, predicate_fn)| {
+                let count = parsed_ips_arc.iter()
+                    .filter_map(|opt_addr| opt_addr.as_ref())
+                    .filter(|addr| predicate_fn(**addr))
+                    .count() as i64;
 
-            results.push((
-                name.to_string(),
-                count,
-                total,
-                if total > 0 { (count as f64 / total as f64) * 100.0 } else { 0.0 }
-            ));
+                (
+                    name.to_string(),
+                    count,
+                    total,
+                    if total > 0 { (count as f64 / total as f64) * 100.0 } else { 0.0 }
+                )
+            })
+            .collect();
 
-            // Update progress
-            eval_pb.set_position((pred_idx + 1) as u64);
-            eval_pb.set_message(format!("Evaluated {} predicates", pred_idx + 1));
-        }
-        eval_pb.finish_with_message("Predicate evaluation complete!");
+        // Progress bar is finished automatically
 
         // --- 4. Create the final DataFrame ---
         let names: Vec<String> = results.iter().map(|(name, _, _, _)| name.clone()).collect();

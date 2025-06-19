@@ -73,6 +73,7 @@ dependencies = [
  "itertools 0.12.1",
  "plugin",
  "polars",
+ "rayon",
 ]
 
 [[package]]
