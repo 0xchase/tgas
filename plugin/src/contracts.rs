@@ -4,22 +4,18 @@ use std::net::{IpAddr, Ipv6Addr};
 
 use crate::Plugin;
 
-/* Plugin contracts to make */
-// transform nothing into a series (download ips, generate ips, etc)
-// transform nothing into tabular data (scan)
-// transform tabular data into visual data (plot, etc)
-// transform tabular data into tabular data (filter, etc)
-// map tabular data into tabular data (enrich, etc)
-// map tabular data into list data (enrich, etc)
-// enrich specific fields (ip, domain, etc)
-
-// acquire: scan, download, locate, etc
-// enrich: lookup, locate, etc
-// process: transform, filter, etc
-// analyze: counts, entropy, dispersion, subnets, graphs, etc
-// model: generate, train, etc
-// serve
-// report
+// Attribute macro for easier plugin creation
+#[macro_export]
+macro_rules! plugin {
+    (#[plugin(name = $name:expr, description = $desc:expr)] $($rest:tt)*) => {
+        $($rest)*
+        
+        impl PluginInfo for Self {
+            const NAME: &'static str = $name;
+            const DESCRIPTION: &'static str = $desc;
+        }
+    };
+}
 
 pub fn test() {
     let series = Series::new("a".into(), &[1i32, 2, 3]);
@@ -55,26 +51,44 @@ pub fn test() {
     let schema = Schema::from_iter(vec![field]);
 }
 
-fn for_array<T: PolarsDataType>(array: ChunkedArray<T>) {
+pub trait PluginInfo {
+    const NAME: &'static str;
+    const DESCRIPTION: &'static str;
 }
 
-fn for_series<T: Into<IpAddr>, I: Iterator<Item = T>>(iter: I) {
-    for item in iter {
-        let ip = item.into();
-        println!("{}", ip);
-    }
+// file, stdint, generator, etc
+pub trait Source: PluginInfo + Send + Sync {
+    type Item;
+    fn stream(&self) -> impl Iterator<Item = Self::Item>;
 }
 
-pub trait Categorizer: Plugin<Series, Series> {
-    const CATEGORIES: &'static [&'static str];
+// file, graph, stdout, etc
+pub trait Sink: PluginInfo + Send + Sync {
+    type Item;
+    fn sink(&self, item: Self::Item);
 }
 
-/// A plugin that generates data from nothing
-pub trait Generator: Plugin<(), Series> {
-    /// The name of the series to generate
-    const SERIES_NAME: &'static str;
+// scan, filter, label, etc
+pub trait Transform: PluginInfo + Send + Sync {
+    type In;
+    type Out;
+    fn transform(&self, x: Self::In) -> Self::Out;
 }
 
+pub trait Predicate: PluginInfo + Send + Sync {
+    type In;
+    fn predicate(&self, x: Self::In) -> bool;
+}
+
+// analyze, count, etc
+trait Aggregate: PluginInfo + Send + Sync {
+    type Item;
+    type Out;
+    fn absorb(&mut self, item: Self::Item);
+    fn aggregate(&self) -> Self::Out;
+}
+
+// BELOW IS OLD STUFF TO DELETE LATER
 pub trait MyField {
     const FIELD_NAME: &'static str;
     const FIELD_TYPE: &'static DataType;

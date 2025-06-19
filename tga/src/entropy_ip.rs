@@ -4,8 +4,6 @@ use std::collections::HashMap;
 use crate::IpNetModel;
 use crate::TGA;
 
-//- DATA STRUCTURES -----------------------------------------------------------------
-
 /// Represents a mined value within a segment, containing the value and its probability.
 #[derive(Debug, Clone)]
 pub struct SegmentValue {

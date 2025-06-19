@@ -65,14 +65,3 @@ impl fmt::Display for StatisticsResults {
         Ok(())
     }
 }
-
-impl StatisticsResults {
-    pub fn from_dataframe(df: &polars::prelude::DataFrame) -> Self {
-        Self {
-            total_count: df.column("total_count").unwrap().u64().unwrap().get(0).unwrap() as usize,
-            unique_count: df.column("unique_count").unwrap().u64().unwrap().get(0).unwrap() as usize,
-            duplicate_count: df.column("duplicate_count").unwrap().u64().unwrap().get(0).unwrap() as usize,
-            duplication_ratio: df.column("duplication_ratio").unwrap().f64().unwrap().get(0).unwrap(),
-        }
-    }
-}

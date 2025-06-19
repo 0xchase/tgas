@@ -6,6 +6,8 @@ use tokio::time::sleep;
 
 use ipnet::{IpNet, Ipv4Net, Ipv6Net};
 
+pub mod icmp6;
+pub mod link_local;
 
 pub async fn test_scan() {
     let addrs = vec![

@@ -7,8 +7,7 @@ use indicatif::{ProgressBar, ProgressStyle};
 use polars::prelude::*;
 use plugin::contracts::{AbsorbField, MyField};
 
-use analyze::analysis::{DispersionAnalysis, ShannonEntropyAnalysis, StatisticsAnalysis, SubnetAnalysis, SpecialAnalysis};
-use analyze::analysis::{DispersionResults, ShannonEntropyResults, StatisticsResults, SubnetResults};
+use analyze::analysis::{DispersionAnalysis, ShannonEntropyAnalysis, StatisticsAnalysis, SubnetAnalysis, CountAnalysis};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnalysisType {
@@ -28,69 +27,8 @@ pub enum AnalysisType {
     },
     /// Special IPv6 address block analysis
     Special,
-}
-
-pub fn open_csv_lazy(file: &PathBuf, field: &Option<String>) -> Result<LazyFrame, String> {
-    LazyCsvReader::new(file)
-        .with_infer_schema_length(Some(100))
-        .with_has_header(true)
-        .with_chunk_size(10000)
-        .finish()
-        .map_err(|e| format!("Failed to parse CSV file: {}", e))
-        .map(|lf| match field {
-            Some(field) => lf.select([col(field)]),
-            None => lf
-        }.with_new_streaming(true))
-}
-
-pub fn analyze_file(
-    file: &PathBuf,
-    field: &Option<String>,
-    analysis_type: AnalysisType,
-) -> Result<(), String> {
-    let mut lf = open_csv_lazy(file, field)?;
-    let schema = lf.collect_schema().unwrap();
-
-    /*let file = File::open(file).unwrap();
-    let mut csv_reader = CsvReader::new(file)
-        .with_options(CsvReadOptions::default()
-            .with_infer_schema_length(Some(100))
-            .with_chunk_size(100000));
-    
-    let mut batches = csv_reader.batched_borrowed().unwrap();
-
-    let mut total_df = DataFrame::default();
-    let mut chunks = Vec::new();
-    while let Ok(batch) = batches.next_batches(8) {
-        if let Some(batch) = batch {
-            println!("{}", batch.len());
-            chunks.push(batch);
-        }
-    }*/
-
-    // println!("{}", chunks.len());
-
-
-    // Collect all the columns that have an analysis
-    let mut names = Vec::new();
-    for (name, dtype) in schema.iter() {
-        if dtype == &DataType::String {
-            names.push(name.to_string());
-        }
-    }
-
-    // Build an expression for the columns
-    let expr = names
-        .iter()
-        .map(|name| col(name.to_string()))
-        .collect::<Vec<_>>();
-
-    let df = lf.select(expr).collect().unwrap();
-
-    match analyze(df, analysis_type) {
-        Ok(results) => Ok(()),
-        Err(e) => Err(format!("Analysis failed: {}", e)),
-    }
+    /// EUI-64 address analysis (extract MAC addresses)
+    Eui64,
 }
 
 struct ProgressTracker {
@@ -186,12 +124,20 @@ pub fn analyze(df: DataFrame, analysis_type: AnalysisType) -> Result<(), IoError
             }
         },
         AnalysisType::Special => {
-            for series in df.get_columns() {
+            /*for series in df.get_columns() {
                 let mut analyzer = SpecialAnalysis::new();
                 analyze_column(series, &mut analyzer, df.height())?;
                 let output = analyzer.finalize();
                 crate::print_dataframe(&output);
-            }
+            }*/
+        },
+        AnalysisType::Eui64 => {
+            /*for series in df.get_columns() {
+                let mut analyzer = Eui64Analysis::new();
+                analyze_column(series, &mut analyzer, df.height())?;
+                let output = analyzer.finalize();
+                crate::print_dataframe(&output);
+            }*/
         },
     }
 

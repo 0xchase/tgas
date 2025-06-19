@@ -13,6 +13,7 @@ clap          = { workspace = true }
 inventory     = { workspace = true }
 itertools = "0.12.1"
 ipnet = "2.9.0"
+indicatif = "0.17.7"
 
 [lib]
 path = "src/lib.rs"

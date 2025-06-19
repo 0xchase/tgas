@@ -8,9 +8,12 @@ use ipnet::IpNet;
 use hickory_resolver::AsyncResolver;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use polars::prelude::*;
-use analyze::{analyze, AnalysisType, analyze_file};
+use analyze::{analyze, AnalysisType};
+use sink::print_dataframe;
 
 mod analyze;
+mod source;
+mod sink;
 
 /// A simple example of clap
 #[derive(Parser)]
@@ -43,6 +46,14 @@ enum ProbeModule {
     TcpSynScan,
     IcmpEchoScan,
     UdpScan,
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+#[value(rename_all = "snake_case")]
+enum ScanType {
+    Icmpv4,
+    Icmpv6,
+    LinkLocal,
 }
 
 #[derive(Subcommand)]
@@ -94,7 +105,7 @@ enum AnalysisCommand {
         /// Column name to select from input data
         #[arg(short = 'f', long, value_name = "FIELD")]
         field: Option<String>,
-        
+
         /// Maximum number of subnets to show (default: 10)
         #[arg(short = 'n', long, value_parser = clap::value_parser!(usize), default_value_t = 10)]
         max_subnets: usize,
@@ -113,6 +124,16 @@ enum AnalysisCommand {
         #[arg(short = 'f', long, value_name = "FIELD")]
         field: Option<String>,
     },
+    /// EUI-64 address analysis (extract MAC addresses)
+    Eui64 {
+        /// Path to file containing IPv6 addresses
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+
+        /// Column name to select from input data
+        #[arg(short = 'f', long, value_name = "FIELD")]
+        field: Option<String>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -121,6 +142,20 @@ enum Commands {
     Analyze {
         #[command(subcommand)]
         command: AnalysisCommand,
+    },
+    /// Count addresses matching each predicate
+    Count {
+        /// Path to file containing IPv6 addresses
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+
+        /// Column name to select from input data
+        #[arg(short = 'f', long, value_name = "FIELD")]
+        field: Option<String>,
+
+        /// Specific predicate name to count (default: all predicates)
+        #[arg(short = 'p', long, value_name = "PREDICATE")]
+        predicate: Option<String>,
     },
     /// Discover new targets by scanning the address space
     Discover,
@@ -136,9 +171,13 @@ enum Commands {
     },
     /// Scan the given address set
     Scan {
-        /// Target specification (IP, hostname, or CIDR range)
+        /// Type of scan to perform
+        #[arg(short = 's', long, value_enum, default_value = "icmpv4")]
+        scan_type: ScanType,
+
+        /// Target specification (IP, hostname, or CIDR range) - not needed for link-local scans
         #[arg(value_name = "TARGET")]
-        target: String,
+        target: Option<String>,
 
         /// Target port(s) to scan. Can be a single port, comma-separated list, or range (e.g. 80,443,8000-8010)
         #[arg(short = 'p', long, value_name = "PORT(S)")]
@@ -185,7 +224,7 @@ enum Commands {
         seed: Option<u64>,
 
         /// Source port(s) to use
-        #[arg(short = 's', long)]
+        #[arg(short = 'o', long)]
         source_port: Option<String>,
 
         /// Source IP address(es) to use
@@ -276,53 +315,6 @@ impl Target {
     }
 }
 
-fn format_cell(val: &polars::prelude::AnyValue) -> Cell {
-    match val {
-        AnyValue::Int64(_) | AnyValue::Int32(_) | AnyValue::Int16(_) | AnyValue::Int8(_) |
-        AnyValue::UInt64(_) | AnyValue::UInt32(_) | AnyValue::UInt16(_) | AnyValue::UInt8(_) |
-        AnyValue::Float64(_) | AnyValue::Float32(_) => {
-            Cell::new(val.to_string())
-                .set_alignment(CellAlignment::Right)
-        },
-        AnyValue::String(s) => {
-            Cell::new(s.to_string())
-        }
-        _ => {
-            Cell::new(val.to_string())
-        }
-    }
-}
-
-fn print_dataframe(df: &DataFrame) {
-    let mut table = Table::new();
-    table.set_content_arrangement(ContentArrangement::Dynamic);
-    table.load_preset("     ──            ");
-    
-    // Add headers
-    let headers: Vec<Cell> = df
-        .get_column_names()
-        .iter()
-        .map(|s| Cell::new(s)
-            .add_attribute(Attribute::Bold))
-        .collect();
-    table.set_header(headers);
-
-    // Add data rows
-    for i in 0..df.height() {
-        let row = df.get_row(i).unwrap();
-        let row_data: Vec<Cell> = row.0
-            .iter()
-            .map(|val| format_cell(val))
-            .collect();
-
-        table.add_row(row_data);
-    }
-
-    println!("\n");
-    println!("{}", table);
-    println!("\n");
-}
-
 fn main() {
     let cli = Cli::parse();
 
@@ -331,15 +323,24 @@ fn main() {
     }
 
     match &cli.command {
+        Commands::Count { file, field, predicate } => {
+            let df = source::load_file(file, field);
+            for column in df.get_columns() {
+                let analyzer = ::analyze::analysis::CountAnalysis::new(predicate.clone());
+                let output = analyzer.analyze(column.as_series().unwrap()).unwrap();
+                print_dataframe(&output);
+            }
+        },
         Commands::Generate { count, unique } => {
             println!("Generating {} addresses{}", count, if *unique { " (unique)" } else { "" });
             tga::generate(*count, *unique);
-        }
+        },
         Commands::Train => {
             println!("Running 'train' command");
             // TODO: implement train logic
-        }
+        },
         Commands::Scan { 
+            scan_type,
             target,
             target_ports,
             input_file,
@@ -358,37 +359,83 @@ fn main() {
             probe_module,
             dryrun,
         } => {
-            // Parse the target
-            match Target::parse(target) {
-                Ok(Target::SingleIp(ip)) => {
-                    println!("Targeting single IP: {}", ip);
-                }
-                Ok(Target::Network(net)) => {
-                    println!("Targeting network: {}", net);
-                }
-                Ok(Target::Hostname(name, ips)) => {
-                    println!("Targeting hostname: {} (resolved to {} addresses)", name, ips.len());
-                    for ip in ips {
-                        println!(" - {}", ip);
+            match scan_type {
+                ScanType::LinkLocal => {
+                    println!("Performing IPv6 link-local discovery scan...");
+                    match scan::link_local::discover_all_ipv6_link_local() {
+                        Ok(hosts) => {
+                            println!("Found {} IPv6 hosts:", hosts.len());
+                            for host in hosts {
+                                println!("  - {}", host);
+                            }
+                        }
+                        Err(e) => {
+                            eprintln!("Link-local discovery failed: {}", e);
+                            std::process::exit(1);
+                        }
                     }
                 }
-                Err(e) => {
-                    eprintln!("Error parsing target: {}", e);
-                    std::process::exit(1);
+                ScanType::Icmpv4 | ScanType::Icmpv6 => {
+                    // Parse the target for ICMP scans
+                    let target_str = match target {
+                        Some(t) => t,
+                        None => {
+                            eprintln!("Error: Target is required for ICMP scans");
+                            std::process::exit(1);
+                        }
+                    };
+                    
+                    match Target::parse(&target_str) {
+                        Ok(Target::SingleIp(ip)) => {
+                            println!("Targeting single IP: {}", ip);
+                            // TODO: Implement single IP scanning
+                        }
+                        Ok(Target::Network(net)) => {
+                            match (*scan_type, net) {
+                                (ScanType::Icmpv4, IpNet::V4(net)) => {
+                                    println!("Performing ICMPv4 scan of network: {}", net);
+                                    let results = scan::icmp6::icmp4_scan(net);
+                                    println!("Scan complete. Found {} responsive hosts:", results.len());
+                                    for result in results {
+                                        println!("  - {} (RTT: {:?})", result.addr, result.rtt);
+                                    }
+                                }
+                                (ScanType::Icmpv6, IpNet::V6(net)) => {
+                                    println!("Performing ICMPv6 scan of network: {}", net);
+                                    let results = scan::icmp6::icmp6_scan(net);
+                                    println!("Scan complete. Found {} responsive hosts:", results.len());
+                                    for result in results {
+                                        println!("  - {} (RTT: {:?})", result.addr, result.rtt);
+                                    }
+                                }
+                                (ScanType::Icmpv4, IpNet::V6(_)) => {
+                                    eprintln!("Error: ICMPv4 scan requires IPv4 network, got IPv6");
+                                    std::process::exit(1);
+                                }
+                                (ScanType::Icmpv6, IpNet::V4(_)) => {
+                                    eprintln!("Error: ICMPv6 scan requires IPv6 network, got IPv4");
+                                    std::process::exit(1);
+                                }
+                                (ScanType::LinkLocal, _) => {
+                                    eprintln!("Error: Link-local scans don't use network targets");
+                                    std::process::exit(1);
+                                }
+                            }
+                        }
+                        Ok(Target::Hostname(name, ips)) => {
+                            println!("Targeting hostname: {} (resolved to {} addresses)", name, ips.len());
+                            for ip in ips {
+                                println!(" - {}", ip);
+                            }
+                            // TODO: Implement hostname scanning
+                        }
+                        Err(e) => {
+                            eprintln!("Error parsing target: {}", e);
+                            std::process::exit(1);
+                        }
+                    }
                 }
             }
-
-            /*println!("Configuring scan with:");
-            if let Some(ports) = target_ports {
-                println!("  Ports: {}", ports);
-            }
-            println!("  Rate: {} pps", rate);
-            if *dryrun {
-                println!("Running in dry-run mode");
-            }*/
-
-            // TODO: Configure scanner with these parameters
-            scan::test_scan();
         }
         Commands::Discover => {
             println!("Running 'discover' command");
@@ -397,29 +444,38 @@ fn main() {
         Commands::Analyze { command } => {
             let result = match command {
                 AnalysisCommand::Counts { file, field } => {
-                    analyze_file(&file, field, AnalysisType::Counts)
+                    let df = source::load_file(file, field);
+                    analyze(df, AnalysisType::Counts)
                 },
                 AnalysisCommand::Dispersion { file, field } => {
-                    analyze_file(&file, field, AnalysisType::Dispersion)
+                    let df = source::load_file(file, field);
+                    analyze(df, AnalysisType::Dispersion)
                 },
                 AnalysisCommand::Entropy { file, field, start_bit, end_bit } => {
                     if start_bit >= end_bit {
                         eprintln!("Error: start_bit must be less than end_bit");
                         std::process::exit(1);
                     }
-                    analyze_file(&file, field, AnalysisType::Entropy {
+                    let df = source::load_file(file, field);
+                    analyze(df, AnalysisType::Entropy {
                         start_bit: *start_bit,
                         end_bit: *end_bit,
                     })
                 },
                 AnalysisCommand::Subnets { file, field, max_subnets, prefix_length } => {
-                    analyze_file(&file, field, AnalysisType::Subnets {
+                    let df = source::load_file(file, field);
+                    analyze(df, AnalysisType::Subnets {
                         max_subnets: *max_subnets,
                         prefix_length: *prefix_length,
                     })
                 },
                 AnalysisCommand::Special { file, field } => {
-                    analyze_file(&file, field, AnalysisType::Special)
+                    let df = source::load_file(file, field);
+                    analyze(df, AnalysisType::Special)
+                },
+                AnalysisCommand::Eui64 { file, field } => {
+                    let df = source::load_file(file, field);
+                    analyze(df, AnalysisType::Eui64)
                 },
             };
 
