@@ -157,6 +157,20 @@ enum Commands {
         #[arg(short = 'p', long, value_name = "PREDICATE")]
         predicate: Option<String>,
     },
+    /// Filter addresses by predicate
+    Filter {
+        /// Path to file containing IPv6 addresses
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+
+        /// Column name to select from input data
+        #[arg(short = 'f', long, value_name = "FIELD")]
+        field: Option<String>,
+
+        /// Predicate name to filter by
+        #[arg(short = 'p', long, value_name = "PREDICATE")]
+        predicate: String,
+    },
     /// Discover new targets by scanning the address space
     Discover,
     /// Generate a set of targets
@@ -327,6 +341,14 @@ fn main() {
             let df = source::load_file(file, field);
             for column in df.get_columns() {
                 let analyzer = ::analyze::analysis::CountAnalysis::new(predicate.clone());
+                let output = analyzer.analyze(column.as_series().unwrap()).unwrap();
+                print_dataframe(&output);
+            }
+        },
+        Commands::Filter { file, field, predicate } => {
+            let df = source::load_file(file, field);
+            for column in df.get_columns() {
+                let analyzer = ::analyze::analysis::FilterAnalysis::new(predicate.clone());
                 let output = analyzer.analyze(column.as_series().unwrap()).unwrap();
                 print_dataframe(&output);
             }
