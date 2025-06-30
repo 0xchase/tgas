@@ -1,4 +1,4 @@
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::Parser;
 use comfy_table::{CellAlignment, Row};
 use comfy_table::{Table, ContentArrangement, modifiers::UTF8_ROUND_CORNERS, Attribute, Cell};
 use std::path::PathBuf;
@@ -15,345 +15,30 @@ use sink::print_dataframe;
 mod analyze;
 mod source;
 mod sink;
+mod frontends;
 
-/// A simple example of clap
-#[derive(Parser)]
-#[command(
-    name = "ipv6kit",
-    about = "IPv6 network scanning and analysis toolkit",
-    version = "0.1.0",
-    author = "Chase Kanipe"
-)]
-struct Cli {
-    /// Increase output verbosity
-    #[arg(short, long, action = clap::ArgAction::Count)]
-    verbose: u8,
-
-    /// Log file path
-    #[arg(short, long, value_name = "LOG_FILE")]
-    log: Option<PathBuf>,
-
-    /// Output file (use "-" for stdout)
-    #[arg(short = 'o', long, default_value = "-")]
-    output_file: String,
-
-    #[command(subcommand)]
-    command: Commands,
-}
-
-#[derive(Clone, ValueEnum)]
-#[value(rename_all = "snake_case")]
-enum ProbeModule {
-    TcpSynScan,
-    IcmpEchoScan,
-    UdpScan,
-}
-
-#[derive(Clone, Copy, ValueEnum)]
-#[value(rename_all = "snake_case")]
-enum ScanType {
-    Icmpv4,
-    Icmpv6,
-    LinkLocal,
-}
-
-#[derive(Clone, ValueEnum)]
-#[value(rename_all = "snake_case")]
-enum ReservedPredicate {
-    Loopback,
-    Unspecified,
-    LinkLocal,
-    UniqueLocal,
-}
-
-#[derive(Clone, ValueEnum)]
-#[value(rename_all = "snake_case")]
-enum MulticastPredicate {
-    Multicast,
-    SolicitedNode,
-}
-
-#[derive(Clone, ValueEnum)]
-#[value(rename_all = "snake_case")]
-enum TransitionPredicate {
-    Ipv4Mapped,
-    Ipv4ToIpv6,
-    ExtendedIpv4,
-    Ipv6ToIpv4,
-}
-
-#[derive(Clone, ValueEnum)]
-#[value(rename_all = "snake_case")]
-enum DocumentationPredicate {
-    Documentation,
-    Documentation2,
-    Benchmarking,
-}
-
-#[derive(Clone, ValueEnum)]
-#[value(rename_all = "snake_case")]
-enum ProtocolPredicate {
-    Teredo,
-    IetfProtocol,
-    PortControl,
-    Turn,
-    DnsSd,
-    Amt,
-    SegmentRouting,
-}
-
-#[derive(Clone, ValueEnum)]
-#[value(rename_all = "snake_case")]
-enum SpecialPurposePredicate {
-    DiscardOnly,
-    DummyPrefix,
-    As112V6,
-    DirectAs112,
-    DeprecatedOrchid,
-    OrchidV2,
-    DroneRemoteId,
-}
-
-#[derive(Clone, ValueEnum)]
-#[value(rename_all = "snake_case")]
-enum Eui64Predicate {
-    Eui64,
-    LowByteHost,
-}
-
-#[derive(Subcommand)]
-enum ViewAnalysisCommand {
-    /// Basic address counts and statistics
-    Unique,
-    /// Address space dispersion metrics
-    Dispersion,
-    /// Information entropy analysis
-    Entropy {
-        /// Start bit position (0-127) for entropy calculation
-        #[arg(short = 's', long, value_parser = clap::value_parser!(u8).range(0..=127), default_value_t = 0)]
-        start_bit: u8,
-
-        /// End bit position (1-128) for entropy calculation
-        #[arg(short = 'e', long, value_parser = clap::value_parser!(u8).range(1..=128), default_value_t = 128)]
-        end_bit: u8,
-    },
-    /// Subnet distribution analysis
-    Subnets {
-        /// Maximum number of subnets to show (default: 10)
-        #[arg(short = 'n', long, value_parser = clap::value_parser!(usize), default_value_t = 10)]
-        max_subnets: usize,
-
-        /// CIDR prefix length (default: 64)
-        #[arg(short = 'l', long, value_parser = clap::value_parser!(u8).range(1..=128), default_value_t = 64)]
-        prefix_length: u8,
-    },
-}
-
-#[derive(Subcommand)]
-enum Commands {
-    /// Discover new targets by scanning the address space
-    Discover,
-    /// Generate a set of targets
-    Generate {
-        /// Number of addresses to generate
-        #[arg(short = 'n', long, default_value = "10")]
-        count: usize,
-
-        /// Ensure generated addresses are unique
-        #[arg(short = 'u', long)]
-        unique: bool,
-    },
-    /// Scan the given address set
-    Scan {
-        /// Type of scan to perform
-        #[arg(short = 's', long, value_enum, default_value = "icmpv4")]
-        scan_type: ScanType,
-
-        /// Target specification (IP, hostname, or CIDR range) - not needed for link-local scans
-        #[arg(value_name = "TARGET")]
-        target: Option<String>,
-
-        /// Target port(s) to scan. Can be a single port, comma-separated list, or range (e.g. 80,443,8000-8010)
-        #[arg(short = 'p', long, value_name = "PORT(S)")]
-        target_ports: Option<String>,
-
-        /// Input file containing targets (one per line)
-        #[arg(short = 'I', long)]
-        input_file: Option<PathBuf>,
-
-        /// File containing CIDR ranges to exclude
-        #[arg(short = 'b', long)]
-        blocklist_file: Option<PathBuf>,
-
-        /// File containing CIDR ranges to include
-        #[arg(short = 'w', long)]
-        allowlist_file: Option<PathBuf>,
-
-        /// Maximum number of targets to probe
-        #[arg(short = 'n', long)]
-        max_targets: Option<String>,
-
-        /// Send rate in packets per second
-        #[arg(short = 'r', long, default_value = "10000")]
-        rate: u32,
-
-        /// Bandwidth cap (e.g. 10M, 1G)
-        #[arg(short = 'B', long)]
-        bandwidth: Option<String>,
-
-        /// Number of probes to send to each target
-        #[arg(short = 'P', long, default_value = "1")]
-        probes: u32,
-
-        /// Maximum runtime in seconds
-        #[arg(short = 't', long)]
-        max_runtime: Option<u32>,
-
-        /// Cooldown time in seconds
-        #[arg(short = 'c', long, default_value = "8")]
-        cooldown_time: u32,
-
-        /// Random seed for target selection
-        #[arg(short = 'e', long)]
-        seed: Option<u64>,
-
-        /// Source port(s) to use
-        #[arg(short = 'o', long)]
-        source_port: Option<String>,
-
-        /// Source IP address(es) to use
-        #[arg(short = 'S', long)]
-        source_ip: Option<String>,
-
-        /// Network interface to use
-        #[arg(short = 'i', long)]
-        interface: Option<String>,
-
-        /// Type of probe to send
-        #[arg(short = 'M', long, value_enum, default_value = "tcp_syn_scan")]
-        probe_module: ProbeModule,
-
-        /// Run in dry-run mode (print packets instead of sending)
-        #[arg(short = 'd', long)]
-        dryrun: bool,
-    },
-    /// Train the TGA
-    Train,
-    /// View and analyze data in an interactive TUI
-    View {
-        /// Path to file containing data to view
-        #[arg(value_name = "FILE")]
-        file: PathBuf,
-
-        /// Column name to select from input data
-        #[arg(short = 'f', long, value_name = "FIELD")]
-        field: Option<String>,
-
-        /// Filter by reserved address types
-        #[arg(long, value_enum)]
-        reserved: Option<ReservedPredicate>,
-
-        /// Filter by multicast address types
-        #[arg(long, value_enum)]
-        multicast: Option<MulticastPredicate>,
-
-        /// Filter by transition address types
-        #[arg(long, value_enum)]
-        transition: Option<TransitionPredicate>,
-
-        /// Filter by documentation address types
-        #[arg(long, value_enum)]
-        documentation: Option<DocumentationPredicate>,
-
-        /// Filter by protocol address types
-        #[arg(long, value_enum)]
-        protocol: Option<ProtocolPredicate>,
-
-        /// Filter by special purpose address types
-        #[arg(long, value_enum)]
-        special_purpose: Option<SpecialPurposePredicate>,
-
-        /// Filter by EUI-64 address types
-        #[arg(long, value_enum)]
-        eui64: Option<Eui64Predicate>,
-
-        /// Output counts rather than full IP list
-        #[arg(short = 'c', long)]
-        count: bool,
-
-        /// Analysis subcommand to run
-        #[command(subcommand)]
-        analysis: Option<ViewAnalysisCommand>,
-
-        /// Show the resulting dataframe in an interactive TUI
-        #[arg(long)]
-        tui: bool,
-    },
-}
-
-#[derive(Debug)]
-pub enum TargetError {
-    IpAddrParse(std::net::AddrParseError),
-    IpNetParse(ipnet::AddrParseError),
-    DnsResolve(hickory_resolver::error::ResolveError),
-    NoAddressFound,
-}
-
-impl std::fmt::Display for TargetError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            TargetError::IpAddrParse(e) => write!(f, "Failed to parse IP address: {}", e),
-            TargetError::IpNetParse(e) => write!(f, "Failed to parse IP network: {}", e),
-            TargetError::DnsResolve(e) => write!(f, "Failed to resolve hostname: {}", e),
-            TargetError::NoAddressFound => write!(f, "No valid IP addresses found for hostname"),
-        }
-    }
-}
-
-#[derive(Debug)]
-enum Target {
-    SingleIp(IpAddr),
-    Network(IpNet),
-    Hostname(String, Vec<IpAddr>),
-}
-
-impl Target {
-    fn parse(input: &str) -> Result<Self, TargetError> {
-        // Try parsing as IP address first
-        if let Ok(ip) = input.parse::<IpAddr>() {
-            return Ok(Target::SingleIp(ip));
-        }
-
-        // Try parsing as CIDR network
-        if let Ok(net) = input.parse::<IpNet>() {
-            return Ok(Target::Network(net));
-        }
-
-        // Try resolving as hostname
-        /*let resolver = AsyncResolver::tokio(
-            ResolverConfig::default(),
-            ResolverOpts::default(),
-        );
-        
-        let response = resolver.lookup_ip(input).await
-            .map_err(TargetError::DnsResolve)?;
-            
-        let addresses: Vec<IpAddr> = response.iter().collect();
-        
-        if addresses.is_empty() {
-            return Err(TargetError::NoAddressFound);
-        }
-
-        Ok(Target::Hostname(input.to_string(), addresses))*/
-        todo!()
-    }
-}
+use frontends::cli::{Cli, Commands, Target, command_to_remote_args};
+use frontends::grpc::{run_server, execute_remote_command};
 
 fn main() {
     let cli = Cli::parse();
 
     if let Some(log_path) = &cli.log {
         println!("Logging to file: {:?}", log_path);
+    }
+
+    // Handle remote execution if --remote flag is provided
+    if let Some(server_addr) = &cli.remote {
+        // Convert command to arguments for remote execution
+        let (command, args) = command_to_remote_args(&cli.command);
+
+        // Execute remotely
+        let rt = tokio::runtime::Runtime::new().unwrap();
+        if let Err(e) = rt.block_on(execute_remote_command(server_addr, &command, args)) {
+            eprintln!("Remote execution failed: {}", e);
+            std::process::exit(1);
+        }
+        return;
     }
 
     match &cli.command {
@@ -364,6 +49,14 @@ fn main() {
         Commands::Train => {
             println!("Running 'train' command");
             // TODO: implement train logic
+        },
+        Commands::Serve { addr } => {
+            println!("Starting gRPC server on {}", addr);
+            let rt = tokio::runtime::Runtime::new().unwrap();
+            if let Err(e) = rt.block_on(run_server(addr)) {
+                eprintln!("Server failed: {}", e);
+                std::process::exit(1);
+            }
         },
         Commands::Scan { 
             scan_type,
@@ -386,7 +79,7 @@ fn main() {
             dryrun,
         } => {
             match scan_type {
-                ScanType::LinkLocal => {
+                frontends::cli::ScanType::LinkLocal => {
                     println!("Performing IPv6 link-local discovery scan...");
                     match scan::link_local::discover_all_ipv6_link_local() {
                         Ok(hosts) => {
@@ -401,7 +94,7 @@ fn main() {
                         }
                     }
                 }
-                ScanType::Icmpv4 | ScanType::Icmpv6 => {
+                frontends::cli::ScanType::Icmpv4 | frontends::cli::ScanType::Icmpv6 => {
                     // Parse the target for ICMP scans
                     let target_str = match target {
                         Some(t) => t,
@@ -418,7 +111,7 @@ fn main() {
                         }
                         Ok(Target::Network(net)) => {
                             match (*scan_type, net) {
-                                (ScanType::Icmpv4, IpNet::V4(net)) => {
+                                (frontends::cli::ScanType::Icmpv4, IpNet::V4(net)) => {
                                     println!("Performing ICMPv4 scan of network: {}", net);
                                     let results = scan::icmp6::icmp4_scan(net);
                                     println!("Scan complete. Found {} responsive hosts:", results.len());
@@ -426,7 +119,7 @@ fn main() {
                                         println!("  - {} (RTT: {:?})", result.addr, result.rtt);
                                     }
                                 }
-                                (ScanType::Icmpv6, IpNet::V6(net)) => {
+                                (frontends::cli::ScanType::Icmpv6, IpNet::V6(net)) => {
                                     println!("Performing ICMPv6 scan of network: {}", net);
                                     let results = scan::icmp6::icmp6_scan(net);
                                     println!("Scan complete. Found {} responsive hosts:", results.len());
@@ -434,15 +127,15 @@ fn main() {
                                         println!("  - {} (RTT: {:?})", result.addr, result.rtt);
                                     }
                                 }
-                                (ScanType::Icmpv4, IpNet::V6(_)) => {
+                                (frontends::cli::ScanType::Icmpv4, IpNet::V6(_)) => {
                                     eprintln!("Error: ICMPv4 scan requires IPv4 network, got IPv6");
                                     std::process::exit(1);
                                 }
-                                (ScanType::Icmpv6, IpNet::V4(_)) => {
+                                (frontends::cli::ScanType::Icmpv6, IpNet::V4(_)) => {
                                     eprintln!("Error: ICMPv6 scan requires IPv6 network, got IPv4");
                                     std::process::exit(1);
                                 }
-                                (ScanType::LinkLocal, _) => {
+                                (frontends::cli::ScanType::LinkLocal, _) => {
                                     eprintln!("Error: Link-local scans don't use network targets");
                                     std::process::exit(1);
                                 }
@@ -474,10 +167,10 @@ fn main() {
             // Apply filtering if specified
             let processed_df = if let Some(reserved) = reserved {
                 let reserved_name = match reserved {
-                    ReservedPredicate::Loopback => "loopback",
-                    ReservedPredicate::Unspecified => "unspecified",
-                    ReservedPredicate::LinkLocal => "link_local",
-                    ReservedPredicate::UniqueLocal => "unique_local",
+                    frontends::cli::ReservedPredicate::Loopback => "loopback",
+                    frontends::cli::ReservedPredicate::Unspecified => "unspecified",
+                    frontends::cli::ReservedPredicate::LinkLocal => "link_local",
+                    frontends::cli::ReservedPredicate::UniqueLocal => "unique_local",
                 }.to_string();
                 let columns = df.get_columns();
                 if columns.len() == 1 {
@@ -490,8 +183,8 @@ fn main() {
                 }
             } else if let Some(multicast) = multicast {
                 let multicast_name = match multicast {
-                    MulticastPredicate::Multicast => "multicast",
-                    MulticastPredicate::SolicitedNode => "solicited_node",
+                    frontends::cli::MulticastPredicate::Multicast => "multicast",
+                    frontends::cli::MulticastPredicate::SolicitedNode => "solicited_node",
                 }.to_string();
                 let columns = df.get_columns();
                 if columns.len() == 1 {
@@ -504,10 +197,10 @@ fn main() {
                 }
             } else if let Some(transition) = transition {
                 let transition_name = match transition {
-                    TransitionPredicate::Ipv4Mapped => "ipv4_mapped",
-                    TransitionPredicate::Ipv4ToIpv6 => "ipv4_to_ipv6",
-                    TransitionPredicate::ExtendedIpv4 => "extended_ipv4",
-                    TransitionPredicate::Ipv6ToIpv4 => "ipv6_to_ipv4",
+                    frontends::cli::TransitionPredicate::Ipv4Mapped => "ipv4_mapped",
+                    frontends::cli::TransitionPredicate::Ipv4ToIpv6 => "ipv4_to_ipv6",
+                    frontends::cli::TransitionPredicate::ExtendedIpv4 => "extended_ipv4",
+                    frontends::cli::TransitionPredicate::Ipv6ToIpv4 => "ipv6_to_ipv4",
                 }.to_string();
                 let columns = df.get_columns();
                 if columns.len() == 1 {
@@ -520,9 +213,9 @@ fn main() {
                 }
             } else if let Some(documentation) = documentation {
                 let documentation_name = match documentation {
-                    DocumentationPredicate::Documentation => "documentation",
-                    DocumentationPredicate::Documentation2 => "documentation2",
-                    DocumentationPredicate::Benchmarking => "benchmarking",
+                    frontends::cli::DocumentationPredicate::Documentation => "documentation",
+                    frontends::cli::DocumentationPredicate::Documentation2 => "documentation2",
+                    frontends::cli::DocumentationPredicate::Benchmarking => "benchmarking",
                 }.to_string();
                 let columns = df.get_columns();
                 if columns.len() == 1 {
@@ -535,13 +228,13 @@ fn main() {
                 }
             } else if let Some(protocol) = protocol {
                 let protocol_name = match protocol {
-                    ProtocolPredicate::Teredo => "teredo",
-                    ProtocolPredicate::IetfProtocol => "ietf_protocol",
-                    ProtocolPredicate::PortControl => "port_control",
-                    ProtocolPredicate::Turn => "turn",
-                    ProtocolPredicate::DnsSd => "dns_sd",
-                    ProtocolPredicate::Amt => "amt",
-                    ProtocolPredicate::SegmentRouting => "segment_routing",
+                    frontends::cli::ProtocolPredicate::Teredo => "teredo",
+                    frontends::cli::ProtocolPredicate::IetfProtocol => "ietf_protocol",
+                    frontends::cli::ProtocolPredicate::PortControl => "port_control",
+                    frontends::cli::ProtocolPredicate::Turn => "turn",
+                    frontends::cli::ProtocolPredicate::DnsSd => "dns_sd",
+                    frontends::cli::ProtocolPredicate::Amt => "amt",
+                    frontends::cli::ProtocolPredicate::SegmentRouting => "segment_routing",
                 }.to_string();
                 let columns = df.get_columns();
                 if columns.len() == 1 {
@@ -554,13 +247,13 @@ fn main() {
                 }
             } else if let Some(special_purpose) = special_purpose {
                 let special_purpose_name = match special_purpose {
-                    SpecialPurposePredicate::DiscardOnly => "discard_only",
-                    SpecialPurposePredicate::DummyPrefix => "dummy_prefix",
-                    SpecialPurposePredicate::As112V6 => "as112v6",
-                    SpecialPurposePredicate::DirectAs112 => "direct_as112",
-                    SpecialPurposePredicate::DeprecatedOrchid => "deprecated_orchid",
-                    SpecialPurposePredicate::OrchidV2 => "orchid_v2",
-                    SpecialPurposePredicate::DroneRemoteId => "drone_remote_id",
+                    frontends::cli::SpecialPurposePredicate::DiscardOnly => "discard_only",
+                    frontends::cli::SpecialPurposePredicate::DummyPrefix => "dummy_prefix",
+                    frontends::cli::SpecialPurposePredicate::As112V6 => "as112v6",
+                    frontends::cli::SpecialPurposePredicate::DirectAs112 => "direct_as112",
+                    frontends::cli::SpecialPurposePredicate::DeprecatedOrchid => "deprecated_orchid",
+                    frontends::cli::SpecialPurposePredicate::OrchidV2 => "orchid_v2",
+                    frontends::cli::SpecialPurposePredicate::DroneRemoteId => "drone_remote_id",
                 }.to_string();
                 let columns = df.get_columns();
                 if columns.len() == 1 {
@@ -573,8 +266,8 @@ fn main() {
                 }
             } else if let Some(eui64) = eui64 {
                 let eui64_name = match eui64 {
-                    Eui64Predicate::Eui64 => "eui64",
-                    Eui64Predicate::LowByteHost => "low_byte_host",
+                    frontends::cli::Eui64Predicate::Eui64 => "eui64",
+                    frontends::cli::Eui64Predicate::LowByteHost => "low_byte_host",
                 }.to_string();
                 let columns = df.get_columns();
                 if columns.len() == 1 {
@@ -608,13 +301,13 @@ fn main() {
             // Run analysis if specified
             if let Some(analysis_cmd) = analysis {
                 let result = match analysis_cmd {
-                    ViewAnalysisCommand::Unique => {
+                    frontends::cli::ViewAnalysisCommand::Unique => {
                         analyze(processed_df, AnalysisType::Unique)
                     },
-                    ViewAnalysisCommand::Dispersion => {
+                    frontends::cli::ViewAnalysisCommand::Dispersion => {
                         analyze(processed_df, AnalysisType::Dispersion)
                     },
-                    ViewAnalysisCommand::Entropy { start_bit, end_bit } => {
+                    frontends::cli::ViewAnalysisCommand::Entropy { start_bit, end_bit } => {
                         if start_bit >= end_bit {
                             eprintln!("Error: start_bit must be less than end_bit");
                             std::process::exit(1);
@@ -624,7 +317,7 @@ fn main() {
                             end_bit: *end_bit,
                         })
                     },
-                    ViewAnalysisCommand::Subnets { max_subnets, prefix_length } => {
+                    frontends::cli::ViewAnalysisCommand::Subnets { max_subnets, prefix_length } => {
                         analyze(processed_df, AnalysisType::Subnets {
                             max_subnets: *max_subnets,
                             prefix_length: *prefix_length,
@@ -661,4 +354,4 @@ fn main() {
             }
         }
     }
-}
+} 
