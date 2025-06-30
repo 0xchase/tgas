@@ -8,6 +8,7 @@ use ipnet::IpNet;
 use hickory_resolver::AsyncResolver;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
 use polars::prelude::*;
+use polars::lazy::dsl::col;
 use analyze::{analyze, AnalysisType};
 use sink::print_dataframe;
 
@@ -57,37 +58,13 @@ enum ScanType {
 }
 
 #[derive(Subcommand)]
-enum AnalysisCommand {
+enum ViewAnalysisCommand {
     /// Basic address counts and statistics
-    Counts {
-        /// Path to file containing IPv6 addresses
-        #[arg(value_name = "FILE")]
-        file: PathBuf,
-
-        /// Column name to select from input data
-        #[arg(short = 'f', long, value_name = "FIELD")]
-        field: Option<String>,
-    },
+    Unique,
     /// Address space dispersion metrics
-    Dispersion {
-        /// Path to file containing IPv6 addresses
-        #[arg(value_name = "FILE")]
-        file: PathBuf,
-
-        /// Column name to select from input data
-        #[arg(short = 'f', long, value_name = "FIELD")]
-        field: Option<String>,
-    },
+    Dispersion,
     /// Information entropy analysis
     Entropy {
-        /// Path to file containing IPv6 addresses
-        #[arg(value_name = "FILE")]
-        file: PathBuf,
-
-        /// Column name to select from input data
-        #[arg(short = 'f', long, value_name = "FIELD")]
-        field: Option<String>,
-
         /// Start bit position (0-127) for entropy calculation
         #[arg(short = 's', long, value_parser = clap::value_parser!(u8).range(0..=127), default_value_t = 0)]
         start_bit: u8,
@@ -98,14 +75,6 @@ enum AnalysisCommand {
     },
     /// Subnet distribution analysis
     Subnets {
-        /// Path to file containing IPv6 addresses
-        #[arg(value_name = "FILE")]
-        file: PathBuf,
-
-        /// Column name to select from input data
-        #[arg(short = 'f', long, value_name = "FIELD")]
-        field: Option<String>,
-
         /// Maximum number of subnets to show (default: 10)
         #[arg(short = 'n', long, value_parser = clap::value_parser!(usize), default_value_t = 10)]
         max_subnets: usize,
@@ -115,62 +84,13 @@ enum AnalysisCommand {
         prefix_length: u8,
     },
     /// Special IPv6 address block analysis
-    Special {
-        /// Path to file containing IPv6 addresses
-        #[arg(value_name = "FILE")]
-        file: PathBuf,
-
-        /// Column name to select from input data
-        #[arg(short = 'f', long, value_name = "FIELD")]
-        field: Option<String>,
-    },
+    Special,
     /// EUI-64 address analysis (extract MAC addresses)
-    Eui64 {
-        /// Path to file containing IPv6 addresses
-        #[arg(value_name = "FILE")]
-        file: PathBuf,
-
-        /// Column name to select from input data
-        #[arg(short = 'f', long, value_name = "FIELD")]
-        field: Option<String>,
-    },
+    Eui64,
 }
 
 #[derive(Subcommand)]
 enum Commands {
-    /// Analyze IPv6 addresses from a file
-    Analyze {
-        #[command(subcommand)]
-        command: AnalysisCommand,
-    },
-    /// Count addresses matching each predicate
-    Count {
-        /// Path to file containing IPv6 addresses
-        #[arg(value_name = "FILE")]
-        file: PathBuf,
-
-        /// Column name to select from input data
-        #[arg(short = 'f', long, value_name = "FIELD")]
-        field: Option<String>,
-
-        /// Specific predicate name to count (default: all predicates)
-        #[arg(short = 'p', long, value_name = "PREDICATE")]
-        predicate: Option<String>,
-    },
-    /// Filter addresses by predicate
-    Filter {
-        /// Path to file containing IPv6 addresses
-        #[arg(value_name = "FILE")]
-        file: PathBuf,
-
-        /// Column name to select from input data
-        #[arg(short = 'f', long, value_name = "FIELD")]
-        field: Option<String>,
-
-        /// Predicate name to filter by
-        #[arg(short = 'p', long, value_name = "PREDICATE")]
-        predicate: String,
-    },
     /// Discover new targets by scanning the address space
     Discover,
     /// Generate a set of targets
@@ -259,7 +179,7 @@ enum Commands {
     },
     /// Train the TGA
     Train,
-    /// View data in an interactive TUI
+    /// View and analyze data in an interactive TUI
     View {
         /// Path to file containing data to view
         #[arg(value_name = "FILE")]
@@ -268,6 +188,22 @@ enum Commands {
         /// Column name to select from input data
         #[arg(short = 'f', long, value_name = "FIELD")]
         field: Option<String>,
+
+        /// Filter addresses by predicate
+        #[arg(short = 'F', long, value_name = "PREDICATE")]
+        filter: Option<String>,
+
+        /// Output counts rather than full IP list
+        #[arg(short = 'c', long)]
+        count: bool,
+
+        /// Analysis subcommand to run
+        #[command(subcommand)]
+        analysis: Option<ViewAnalysisCommand>,
+
+        /// Show the resulting dataframe in an interactive TUI
+        #[arg(long)]
+        tui: bool,
     },
 }
 
@@ -337,22 +273,6 @@ fn main() {
     }
 
     match &cli.command {
-        Commands::Count { file, field, predicate } => {
-            let df = source::load_file(file, field);
-            for column in df.get_columns() {
-                let analyzer = ::analyze::analysis::CountAnalysis::new(predicate.clone());
-                let output = analyzer.analyze(column.as_series().unwrap()).unwrap();
-                print_dataframe(&output);
-            }
-        },
-        Commands::Filter { file, field, predicate } => {
-            let df = source::load_file(file, field);
-            for column in df.get_columns() {
-                let analyzer = ::analyze::analysis::FilterAnalysis::new(predicate.clone());
-                let output = analyzer.analyze(column.as_series().unwrap()).unwrap();
-                print_dataframe(&output);
-            }
-        },
         Commands::Generate { count, unique } => {
             println!("Generating {} addresses{}", count, if *unique { " (unique)" } else { "" });
             tga::generate(*count, *unique);
@@ -463,82 +383,100 @@ fn main() {
             println!("Running 'discover' command");
             // TODO: implement discover logic
         }
-        Commands::Analyze { command } => {
-            let result = match command {
-                AnalysisCommand::Counts { file, field } => {
-                    let df = source::load_file(file, field);
-                    analyze(df, AnalysisType::Counts)
-                },
-                AnalysisCommand::Dispersion { file, field } => {
-                    let df = source::load_file(file, field);
-                    analyze(df, AnalysisType::Dispersion)
-                },
-                AnalysisCommand::Entropy { file, field, start_bit, end_bit } => {
-                    if start_bit >= end_bit {
-                        eprintln!("Error: start_bit must be less than end_bit");
+        Commands::View { file, field, filter, count, analysis, tui } => {
+            // Load the data file
+            let df = source::load_file(file, field);
+            
+            // Apply filtering if specified
+            let processed_df = if let Some(predicate) = filter {
+                let columns = df.get_columns();
+                if columns.len() == 1 {
+                    let analyzer = ::analyze::analysis::FilterAnalysis::new(predicate.clone());
+                    analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
+                } else {
+                    // For multiple columns, just use the first one for filtering
+                    let analyzer = ::analyze::analysis::FilterAnalysis::new(predicate.clone());
+                    analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
+                }
+            } else {
+                df
+            };
+            
+            // Apply counting if specified
+            if *count {
+                let columns = processed_df.get_columns();
+                if columns.len() == 1 {
+                    let analyzer = ::analyze::analysis::CountAnalysis::new(None);
+                    let output = analyzer.analyze(columns[0].as_series().unwrap()).unwrap();
+                    print_dataframe(&output);
+                } else {
+                    // For multiple columns, just use the first one for counting
+                    let analyzer = ::analyze::analysis::CountAnalysis::new(None);
+                    let output = analyzer.analyze(columns[0].as_series().unwrap()).unwrap();
+                    print_dataframe(&output);
+                }
+                return;
+            }
+            
+            // Run analysis if specified
+            if let Some(analysis_cmd) = analysis {
+                let result = match analysis_cmd {
+                    ViewAnalysisCommand::Unique => {
+                        analyze(processed_df, AnalysisType::Unique)
+                    },
+                    ViewAnalysisCommand::Dispersion => {
+                        analyze(processed_df, AnalysisType::Dispersion)
+                    },
+                    ViewAnalysisCommand::Entropy { start_bit, end_bit } => {
+                        if start_bit >= end_bit {
+                            eprintln!("Error: start_bit must be less than end_bit");
+                            std::process::exit(1);
+                        }
+                        analyze(processed_df, AnalysisType::Entropy {
+                            start_bit: *start_bit,
+                            end_bit: *end_bit,
+                        })
+                    },
+                    ViewAnalysisCommand::Subnets { max_subnets, prefix_length } => {
+                        analyze(processed_df, AnalysisType::Subnets {
+                            max_subnets: *max_subnets,
+                            prefix_length: *prefix_length,
+                        })
+                    },
+                    ViewAnalysisCommand::Special => {
+                        analyze(processed_df, AnalysisType::Special)
+                    },
+                    ViewAnalysisCommand::Eui64 => {
+                        analyze(processed_df, AnalysisType::Eui64)
+                    },
+                };
+
+                match result {
+                    Ok(_) => (),
+                    Err(e) => {
+                        eprintln!("{}", e);
                         std::process::exit(1);
                     }
-                    let df = source::load_file(file, field);
-                    analyze(df, AnalysisType::Entropy {
-                        start_bit: *start_bit,
-                        end_bit: *end_bit,
-                    })
-                },
-                AnalysisCommand::Subnets { file, field, max_subnets, prefix_length } => {
-                    let df = source::load_file(file, field);
-                    analyze(df, AnalysisType::Subnets {
-                        max_subnets: *max_subnets,
-                        prefix_length: *prefix_length,
-                    })
-                },
-                AnalysisCommand::Special { file, field } => {
-                    let df = source::load_file(file, field);
-                    analyze(df, AnalysisType::Special)
-                },
-                AnalysisCommand::Eui64 { file, field } => {
-                    let df = source::load_file(file, field);
-                    analyze(df, AnalysisType::Eui64)
-                },
-            };
-
-            match result {
-                Ok(df) => (),
-                Err(e) => {
-                    eprintln!("{}", e);
-                    std::process::exit(1);
                 }
+                return;
             }
-        }
-        Commands::View { file, field } => {
-            // Try reading as CSV first
-            let df = match CsvReader::new(File::open(&file)
-                .map_err(|e| format!("Failed to open file: {}", e)).unwrap())
-                .finish() {
-                    Ok(df) => df,
-                    Err(e) => {
-                        // If CSV fails, try Parquet
-                        ParquetReader::new(File::open(&file)
-                            .map_err(|e| format!("Failed to open file: {}", e)).unwrap())
-                            .finish()
-                            .map_err(|e| format!("Failed to parse Parquet file: {}", e))
-                            .map_err(|e| {
-                                eprintln!("Error: {}", e);
-                                std::process::exit(1);
-                            }).unwrap()
-                    }
-                };
             
+            // Default: show interactive TUI
             let df = match field {
-                Some(field) => df
+                Some(field) => processed_df
                     .lazy()
                     .select([col(field)]),
-                None => df
+                None => processed_df
                     .lazy()
             };
 
-            if let Err(e) = view::run_tui(df) {
-                eprintln!("Error running TUI: {}", e);
-                std::process::exit(1);
+            if *tui {
+                if let Err(e) = view::run_tui(df) {
+                    eprintln!("Error running TUI: {}", e);
+                    std::process::exit(1);
+                }
+            } else {
+                print_dataframe(&df.collect().unwrap());
             }
         }
     }

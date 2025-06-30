@@ -1,5 +1,10 @@
 # Notes
 
+## Monday/Tuesday
+
+- Consolidate analyze, count, and filter commands into "view" command
+- Run full train->generate->scan->discover with entropy_ip
+
 ## Papers
 
 - **Paper 1**: Tool paper

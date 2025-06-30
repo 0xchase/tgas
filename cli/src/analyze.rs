@@ -7,12 +7,12 @@ use indicatif::{ProgressBar, ProgressStyle};
 use polars::prelude::*;
 use plugin::contracts::{AbsorbField, MyField};
 
-use analyze::analysis::{DispersionAnalysis, ShannonEntropyAnalysis, StatisticsAnalysis, SubnetAnalysis, CountAnalysis};
+use analyze::analysis::{DispersionAnalysis, ShannonEntropyAnalysis, StatisticsAnalysis, SubnetAnalysis, UniqueAnalysis};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnalysisType {
     /// Basic address counts and statistics (total, unique, duplicates)
-    Counts,
+    Unique,
     /// Address space dispersion metrics (distances between addresses)
     Dispersion,
     /// Information entropy analysis
@@ -91,11 +91,10 @@ impl ProgressTracker {
 
 pub fn analyze(df: DataFrame, analysis_type: AnalysisType) -> Result<(), IoError> {
     match analysis_type {
-        AnalysisType::Counts => {
+        AnalysisType::Unique => {
             for series in df.get_columns() {
-                let mut analyzer = StatisticsAnalysis::new();
-                analyze_column(series, &mut analyzer, df.height())?;
-                let output = analyzer.finalize();
+                let analyzer = UniqueAnalysis::new(None);
+                let output = analyzer.analyze(series.as_series().unwrap()).unwrap();
                 crate::print_dataframe(&output);
             }
         },

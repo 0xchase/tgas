@@ -1,8 +1,6 @@
 use std::net::Ipv6Addr;
 use polars::prelude::*;
-use plugin::contracts::Predicate;
-use indicatif::{ProgressBar, ProgressStyle, ParallelProgressIterator};
-use rayon::prelude::*;
+use indicatif::{ProgressBar, ProgressStyle};
 use crate::analysis::predicates::*;
 
 pub struct FilterAnalysis {
