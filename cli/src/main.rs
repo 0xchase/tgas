@@ -57,6 +57,70 @@ enum ScanType {
     LinkLocal,
 }
 
+#[derive(Clone, ValueEnum)]
+#[value(rename_all = "snake_case")]
+enum ReservedPredicate {
+    Loopback,
+    Unspecified,
+    LinkLocal,
+    UniqueLocal,
+}
+
+#[derive(Clone, ValueEnum)]
+#[value(rename_all = "snake_case")]
+enum MulticastPredicate {
+    Multicast,
+    SolicitedNode,
+}
+
+#[derive(Clone, ValueEnum)]
+#[value(rename_all = "snake_case")]
+enum TransitionPredicate {
+    Ipv4Mapped,
+    Ipv4ToIpv6,
+    ExtendedIpv4,
+    Ipv6ToIpv4,
+}
+
+#[derive(Clone, ValueEnum)]
+#[value(rename_all = "snake_case")]
+enum DocumentationPredicate {
+    Documentation,
+    Documentation2,
+    Benchmarking,
+}
+
+#[derive(Clone, ValueEnum)]
+#[value(rename_all = "snake_case")]
+enum ProtocolPredicate {
+    Teredo,
+    IetfProtocol,
+    PortControl,
+    Turn,
+    DnsSd,
+    Amt,
+    SegmentRouting,
+}
+
+#[derive(Clone, ValueEnum)]
+#[value(rename_all = "snake_case")]
+enum SpecialPurposePredicate {
+    DiscardOnly,
+    DummyPrefix,
+    As112V6,
+    DirectAs112,
+    DeprecatedOrchid,
+    OrchidV2,
+    DroneRemoteId,
+}
+
+#[derive(Clone, ValueEnum)]
+#[value(rename_all = "snake_case")]
+enum Eui64Predicate {
+    Eui64,
+    LowByteHost,
+}
+
 #[derive(Subcommand)]
 enum ViewAnalysisCommand {
     /// Basic address counts and statistics
@@ -83,10 +147,6 @@ enum ViewAnalysisCommand {
         #[arg(short = 'l', long, value_parser = clap::value_parser!(u8).range(1..=128), default_value_t = 64)]
         prefix_length: u8,
     },
-    /// Special IPv6 address block analysis
-    Special,
-    /// EUI-64 address analysis (extract MAC addresses)
-    Eui64,
 }
 
 #[derive(Subcommand)]
@@ -189,9 +249,33 @@ enum Commands {
         #[arg(short = 'f', long, value_name = "FIELD")]
         field: Option<String>,
 
-        /// Filter addresses by predicate
-        #[arg(short = 'F', long, value_name = "PREDICATE")]
-        filter: Option<String>,
+        /// Filter by reserved address types
+        #[arg(long, value_enum)]
+        reserved: Option<ReservedPredicate>,
+
+        /// Filter by multicast address types
+        #[arg(long, value_enum)]
+        multicast: Option<MulticastPredicate>,
+
+        /// Filter by transition address types
+        #[arg(long, value_enum)]
+        transition: Option<TransitionPredicate>,
+
+        /// Filter by documentation address types
+        #[arg(long, value_enum)]
+        documentation: Option<DocumentationPredicate>,
+
+        /// Filter by protocol address types
+        #[arg(long, value_enum)]
+        protocol: Option<ProtocolPredicate>,
+
+        /// Filter by special purpose address types
+        #[arg(long, value_enum)]
+        special_purpose: Option<SpecialPurposePredicate>,
+
+        /// Filter by EUI-64 address types
+        #[arg(long, value_enum)]
+        eui64: Option<Eui64Predicate>,
 
         /// Output counts rather than full IP list
         #[arg(short = 'c', long)]
@@ -383,19 +467,122 @@ fn main() {
             println!("Running 'discover' command");
             // TODO: implement discover logic
         }
-        Commands::View { file, field, filter, count, analysis, tui } => {
+        Commands::View { file, field, reserved, multicast, transition, documentation, protocol, special_purpose, eui64, count, analysis, tui } => {
             // Load the data file
             let df = source::load_file(file, field);
             
             // Apply filtering if specified
-            let processed_df = if let Some(predicate) = filter {
+            let processed_df = if let Some(reserved) = reserved {
+                let reserved_name = match reserved {
+                    ReservedPredicate::Loopback => "loopback",
+                    ReservedPredicate::Unspecified => "unspecified",
+                    ReservedPredicate::LinkLocal => "link_local",
+                    ReservedPredicate::UniqueLocal => "unique_local",
+                }.to_string();
                 let columns = df.get_columns();
                 if columns.len() == 1 {
-                    let analyzer = ::analyze::analysis::FilterAnalysis::new(predicate.clone());
+                    let analyzer = ::analyze::analysis::FilterAnalysis::new(reserved_name.clone());
                     analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
                 } else {
                     // For multiple columns, just use the first one for filtering
-                    let analyzer = ::analyze::analysis::FilterAnalysis::new(predicate.clone());
+                    let analyzer = ::analyze::analysis::FilterAnalysis::new(reserved_name.clone());
+                    analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
+                }
+            } else if let Some(multicast) = multicast {
+                let multicast_name = match multicast {
+                    MulticastPredicate::Multicast => "multicast",
+                    MulticastPredicate::SolicitedNode => "solicited_node",
+                }.to_string();
+                let columns = df.get_columns();
+                if columns.len() == 1 {
+                    let analyzer = ::analyze::analysis::FilterAnalysis::new(multicast_name.clone());
+                    analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
+                } else {
+                    // For multiple columns, just use the first one for filtering
+                    let analyzer = ::analyze::analysis::FilterAnalysis::new(multicast_name.clone());
+                    analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
+                }
+            } else if let Some(transition) = transition {
+                let transition_name = match transition {
+                    TransitionPredicate::Ipv4Mapped => "ipv4_mapped",
+                    TransitionPredicate::Ipv4ToIpv6 => "ipv4_to_ipv6",
+                    TransitionPredicate::ExtendedIpv4 => "extended_ipv4",
+                    TransitionPredicate::Ipv6ToIpv4 => "ipv6_to_ipv4",
+                }.to_string();
+                let columns = df.get_columns();
+                if columns.len() == 1 {
+                    let analyzer = ::analyze::analysis::FilterAnalysis::new(transition_name.clone());
+                    analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
+                } else {
+                    // For multiple columns, just use the first one for filtering
+                    let analyzer = ::analyze::analysis::FilterAnalysis::new(transition_name.clone());
+                    analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
+                }
+            } else if let Some(documentation) = documentation {
+                let documentation_name = match documentation {
+                    DocumentationPredicate::Documentation => "documentation",
+                    DocumentationPredicate::Documentation2 => "documentation2",
+                    DocumentationPredicate::Benchmarking => "benchmarking",
+                }.to_string();
+                let columns = df.get_columns();
+                if columns.len() == 1 {
+                    let analyzer = ::analyze::analysis::FilterAnalysis::new(documentation_name.clone());
+                    analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
+                } else {
+                    // For multiple columns, just use the first one for filtering
+                    let analyzer = ::analyze::analysis::FilterAnalysis::new(documentation_name.clone());
+                    analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
+                }
+            } else if let Some(protocol) = protocol {
+                let protocol_name = match protocol {
+                    ProtocolPredicate::Teredo => "teredo",
+                    ProtocolPredicate::IetfProtocol => "ietf_protocol",
+                    ProtocolPredicate::PortControl => "port_control",
+                    ProtocolPredicate::Turn => "turn",
+                    ProtocolPredicate::DnsSd => "dns_sd",
+                    ProtocolPredicate::Amt => "amt",
+                    ProtocolPredicate::SegmentRouting => "segment_routing",
+                }.to_string();
+                let columns = df.get_columns();
+                if columns.len() == 1 {
+                    let analyzer = ::analyze::analysis::FilterAnalysis::new(protocol_name.clone());
+                    analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
+                } else {
+                    // For multiple columns, just use the first one for filtering
+                    let analyzer = ::analyze::analysis::FilterAnalysis::new(protocol_name.clone());
+                    analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
+                }
+            } else if let Some(special_purpose) = special_purpose {
+                let special_purpose_name = match special_purpose {
+                    SpecialPurposePredicate::DiscardOnly => "discard_only",
+                    SpecialPurposePredicate::DummyPrefix => "dummy_prefix",
+                    SpecialPurposePredicate::As112V6 => "as112v6",
+                    SpecialPurposePredicate::DirectAs112 => "direct_as112",
+                    SpecialPurposePredicate::DeprecatedOrchid => "deprecated_orchid",
+                    SpecialPurposePredicate::OrchidV2 => "orchid_v2",
+                    SpecialPurposePredicate::DroneRemoteId => "drone_remote_id",
+                }.to_string();
+                let columns = df.get_columns();
+                if columns.len() == 1 {
+                    let analyzer = ::analyze::analysis::FilterAnalysis::new(special_purpose_name.clone());
+                    analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
+                } else {
+                    // For multiple columns, just use the first one for filtering
+                    let analyzer = ::analyze::analysis::FilterAnalysis::new(special_purpose_name.clone());
+                    analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
+                }
+            } else if let Some(eui64) = eui64 {
+                let eui64_name = match eui64 {
+                    Eui64Predicate::Eui64 => "eui64",
+                    Eui64Predicate::LowByteHost => "low_byte_host",
+                }.to_string();
+                let columns = df.get_columns();
+                if columns.len() == 1 {
+                    let analyzer = ::analyze::analysis::FilterAnalysis::new(eui64_name.clone());
+                    analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
+                } else {
+                    // For multiple columns, just use the first one for filtering
+                    let analyzer = ::analyze::analysis::FilterAnalysis::new(eui64_name.clone());
                     analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
                 }
             } else {
@@ -442,12 +629,6 @@ fn main() {
                             max_subnets: *max_subnets,
                             prefix_length: *prefix_length,
                         })
-                    },
-                    ViewAnalysisCommand::Special => {
-                        analyze(processed_df, AnalysisType::Special)
-                    },
-                    ViewAnalysisCommand::Eui64 => {
-                        analyze(processed_df, AnalysisType::Eui64)
                     },
                 };
 
