@@ -10,8 +10,6 @@ use tokio::sync::Mutex;
 use metrics::{counter, histogram, gauge, increment_gauge, decrement_gauge};
 use std::time::Instant;
 use metrics_exporter_prometheus;
-
-// Import local modules
 use crate::frontends::cli;
 
 pub mod ipv6kit {
@@ -208,9 +206,9 @@ impl GrpcClient {
         } else {
             format!("http://{}", addr)
         };
-        println!("Connecting to gRPC server at: {}", url);
+        //println!("Connecting to gRPC server at: {}", url);
         let client = ipv6kit::ipv6_kit_service_client::Ipv6KitServiceClient::connect(url).await?;
-        println!("✅ Successfully connected to gRPC server");
+        // println!("✅ Successfully connected to gRPC server");
         Ok(GrpcClient { client })
     }
 } 
