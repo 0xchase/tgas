@@ -6,6 +6,9 @@ service Ipv6KitService {
   rpc Generate (GenerateRequest) returns (DataframeResponse);
   rpc Scan (ScanRequest) returns (DataframeResponse);
   rpc Discover (DiscoverRequest) returns (DataframeResponse);
+  
+  // New endpoint for executing serialized CLI commands
+  rpc ExecuteCommand (ExecuteCommandRequest) returns (DataframeResponse);
 }
 
 message GenerateRequest {
@@ -36,6 +39,11 @@ message DataframeResponse {
   string dataframe_json = 1;
   bool success = 2;
   string error = 3;
+}
+
+// New message for serialized CLI commands
+message ExecuteCommandRequest {
+  string command_json = 1;  // Serialized CLI command structure
 }
 
 enum ScanType {

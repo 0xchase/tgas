@@ -12,6 +12,7 @@ use pnet::transport::{
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
+use metrics::{counter, histogram, gauge};
 
 /// Represents the result of a single probe.
 #[derive(Debug)]
@@ -22,6 +23,10 @@ pub struct ProbeResult {
 
 pub fn icmp4_scan(network: ipnet::Ipv4Net) -> Vec<ProbeResult> {
     println!("Starting ICMPv4 scan of network: {}", network);
+    
+    // Record scan start
+    counter!("ipv6kit_icmp4_scans_total", 1);
+    gauge!("ipv6kit_active_icmp4_scans", 1.0);
 
     let (mut ts, mut tr) = transport::transport_channel(
         4096,
@@ -39,6 +44,9 @@ pub fn icmp4_scan(network: ipnet::Ipv4Net) -> Vec<ProbeResult> {
     let hosts: Vec<Ipv4Addr> = network.hosts().collect();
     let host_count = hosts.len();
     println!("Sending {} ICMPv4 Echo Requests...", host_count);
+    
+    // Record total hosts to scan
+    counter!("ipv6kit_icmp4_hosts_total", host_count as u64);
 
     for (i, host) in hosts.into_iter().enumerate() {
         send_icmpv4_echo_request(&mut ts, source_ip, host);
@@ -55,6 +63,14 @@ pub fn icmp4_scan(network: ipnet::Ipv4Net) -> Vec<ProbeResult> {
     receiver_thread.join().unwrap();
 
     let results: Vec<ProbeResult> = rx.try_iter().collect();
+    
+    // Record scan results
+    counter!("ipv6kit_icmp4_responses_total", results.len() as u64);
+    if host_count > 0 {
+        let response_rate = results.len() as f64 / host_count as f64;
+        gauge!("ipv6kit_icmp4_response_rate", response_rate);
+    }
+    gauge!("ipv6kit_active_icmp4_scans", 0.0);
 
     println!("ICMPv4 scan complete. Found {} responsive hosts.", results.len());
     results
@@ -130,6 +146,10 @@ fn send_icmpv4_echo_request(sender: &mut TransportSender, _source_ip: Ipv4Addr, 
 
 pub fn icmp6_scan(network: ipnet::Ipv6Net) -> Vec<ProbeResult> {
     println!("Starting ICMPv6 scan of network: {}", network);
+    
+    // Record scan start
+    counter!("ipv6kit_icmp6_scans_total", 1);
+    gauge!("ipv6kit_active_icmp6_scans", 1.0);
 
     let (mut ts, mut tr) = transport::transport_channel(
         4096,
@@ -147,6 +167,9 @@ pub fn icmp6_scan(network: ipnet::Ipv6Net) -> Vec<ProbeResult> {
     let hosts: Vec<Ipv6Addr> = network.hosts().collect();
     let host_count = hosts.len();
     println!("Sending {} ICMPv6 Echo Requests...", host_count);
+    
+    // Record total hosts to scan
+    counter!("ipv6kit_icmp6_hosts_total", host_count as u64);
 
     for (i, host) in hosts.into_iter().enumerate() {
         send_icmpv6_echo_request(&mut ts, source_ip, host);
@@ -163,6 +186,14 @@ pub fn icmp6_scan(network: ipnet::Ipv6Net) -> Vec<ProbeResult> {
     receiver_thread.join().unwrap();
 
     let results: Vec<ProbeResult> = rx.try_iter().collect();
+    
+    // Record scan results
+    counter!("ipv6kit_icmp6_responses_total", results.len() as u64);
+    if host_count > 0 {
+        let response_rate = results.len() as f64 / host_count as f64;
+        gauge!("ipv6kit_icmp6_response_rate", response_rate);
+    }
+    gauge!("ipv6kit_active_icmp6_scans", 0.0);
 
     println!("ICMPv6 scan complete. Found {} responsive hosts.", results.len());
     results

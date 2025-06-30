@@ -11,6 +11,7 @@ use std::net::{IpAddr, Ipv6Addr};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
+use metrics::{counter, gauge};
 
 /// Discovers IPv6 hosts on the local network segment using ICMPv6 multicast.
 ///
@@ -145,9 +146,14 @@ pub fn get_usable_interfaces() -> Vec<NetworkInterface> {
 ///
 /// A `Result` containing a `Vec` of discovered `Ipv6Addr`s, or an error string.
 pub fn discover_all_ipv6_link_local() -> Result<Vec<Ipv6Addr>, String> {
+    // Record discovery start
+    counter!("ipv6kit_link_local_discoveries_total", 1);
+    gauge!("ipv6kit_active_link_local_discoveries", 1.0);
+    
     let interfaces = get_usable_interfaces();
     
     if interfaces.is_empty() {
+        gauge!("ipv6kit_active_link_local_discoveries", 0.0);
         return Err("No active network interfaces with IPv6 found.".to_string());
     }
 
@@ -163,11 +169,17 @@ pub fn discover_all_ipv6_link_local() -> Result<Vec<Ipv6Addr>, String> {
             }
             Err(e) => {
                 println!("Warning: Failed to scan interface {}: {}", interface.name, e);
+                counter!("ipv6kit_link_local_interface_errors_total", 1);
             }
         }
     }
     
     let mut results: Vec<Ipv6Addr> = all_hosts.into_iter().collect();
     results.sort();
+    
+    // Record discovery results
+    counter!("ipv6kit_link_local_hosts_discovered_total", results.len() as u64);
+    gauge!("ipv6kit_active_link_local_discoveries", 0.0);
+    
     Ok(results)
 } 

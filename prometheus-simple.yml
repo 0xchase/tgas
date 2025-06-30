@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 15s
+
+scrape_configs:
+  - job_name: 'ipv6kit'
+    static_configs:
+      - targets: ['localhost:9091']
+    scrape_interval: 5s 
