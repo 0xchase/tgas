@@ -1,6 +1,6 @@
 # IPv6 Toolkit
 
-A comprehensive toolkit for IPv6 network scanning, analysis, and address generation.
+A toolkit for IPv6 network scanning, analysis, and address generation.
 
 ## Features
 

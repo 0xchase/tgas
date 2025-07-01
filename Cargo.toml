@@ -2,13 +2,12 @@
 resolver = "3"
 members = [
 	"analyze",
-	"cli",
+	"cli", "download",
 	"plot",
-	#"plugin",
+	"probe",
 	"scan",
 	"tga",
 	"view",
-	# "xdp"
 ]
 
 [workspace.dependencies]
@@ -18,4 +17,4 @@ serde_json    = "1"
 inventory     = { version = "0.3" }
 libloading    = "0.8"
 clap = "4.5.39"
-polars = { version = "0.48.1", features = ["lazy", "csv", "parquet"] }
+polars = { version = "0.48.1", features = ["lazy", "csv"] }

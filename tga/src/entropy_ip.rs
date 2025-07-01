@@ -33,8 +33,6 @@ impl PluginInfo for EntropyIpTga {
     const DESCRIPTION: &'static str = "Entropy/IP algorithm for IPv6 address generation based on entropy analysis and segment mining";
 }
 
-//- IMPLEMENTATION OF TGA ----------------------------------------------------------
-
 #[typetag::serde]
 impl TGA for EntropyIpTga {
     /// Builds the address model from a list of seed IPs. 

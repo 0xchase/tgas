@@ -1,6 +1,6 @@
 [package]
-name = "plot"
+name = "download"
 version = "0.1.0"
 edition = "2024"
 
-[dependencies] 
+[dependencies]

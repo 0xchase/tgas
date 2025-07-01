@@ -8,8 +8,8 @@ anyhow        = { workspace = true }
 clap          = { workspace = true }
 inventory     = { workspace = true }
 polars        = { workspace = true }
-serde         = { version = "1", features = ["derive"] }
-serde_json    = "1"
+serde         = { workspace = true }
+serde_json    = { workspace = true }
 libloading    = "0.8"
 
 [lib]
