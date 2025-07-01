@@ -87,10 +87,10 @@ impl<'a> Iterator for Icmpv6PacketIter<'a> {
 impl Probe<Ipv4Addr> for IcmpProbe {
     const NAME: &'static str = "ICMPv4";
     const DESCRIPTION: &'static str = "ICMPv4 Echo Request probe for IPv4 hosts";
-    type PacketType = icmp::echo_request::EchoRequestPacket<'static>;
+    const CHANNEL_TYPE: TransportChannelType = TransportChannelType::Layer4(TransportProtocol::Ipv4(IpNextHeaderProtocols::Icmp));
     type PacketIterator<'a> = IcmpPacketIter<'a>;
 
-    fn build(&self, _source: Ipv4Addr, _target: Ipv4Addr) -> Result<Self::PacketType, String> {
+    fn build(&self, _source: Ipv4Addr, _target: Ipv4Addr) -> Result<impl Packet, String> {
         let buffer_size = MutableEchoRequestPacket::minimum_packet_size() + self.payload_size;
         let mut buffer = vec![0u8; buffer_size];
         let mut icmp_packet = MutableEchoRequestPacket::new(&mut buffer)
@@ -117,10 +117,10 @@ impl Probe<Ipv4Addr> for IcmpProbe {
 impl Probe<Ipv6Addr> for IcmpProbe {
     const NAME: &'static str = "ICMPv6";
     const DESCRIPTION: &'static str = "ICMPv6 Echo Request probe for IPv6 hosts";
-    type PacketType = icmpv6::echo_request::EchoRequestPacket<'static>;
+    const CHANNEL_TYPE: TransportChannelType = TransportChannelType::Layer4(TransportProtocol::Ipv6(IpNextHeaderProtocols::Icmpv6));
     type PacketIterator<'a> = Icmpv6PacketIter<'a>;
 
-    fn build(&self, source: Ipv6Addr, target: Ipv6Addr) -> Result<Self::PacketType, String> {
+    fn build(&self, source: Ipv6Addr, target: Ipv6Addr) -> Result<impl Packet, String> {
         let buffer_size = MutableIcmpv6EchoRequestPacket::minimum_packet_size() + self.payload_size;
         let mut buffer = vec![0u8; buffer_size];
         let mut icmpv6_packet = MutableIcmpv6EchoRequestPacket::new(&mut buffer)
