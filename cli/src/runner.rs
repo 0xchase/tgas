@@ -200,10 +200,6 @@ pub enum Commands {
         #[arg(value_name = "TARGET")]
         target: Option<String>,
 
-        /// Target port(s) to scan. Can be a single port, comma-separated list, or range (e.g. 80,443,8000-8010)
-        #[arg(short = 'p', long, value_name = "PORT(S)")]
-        target_ports: Option<String>,
-
         /// Input file containing targets (one per line)
         #[arg(short = 'I', long)]
         input_file: Option<PathBuf>,
@@ -224,10 +220,6 @@ pub enum Commands {
         #[arg(short = 'r', long, default_value = "10000")]
         rate: u32,
 
-        /// Bandwidth cap (e.g. 10M, 1G)
-        #[arg(short = 'B', long)]
-        bandwidth: Option<String>,
-
         /// Number of probes to send to each target
         #[arg(short = 'P', long, default_value = "1")]
         probes: u32,
@@ -244,10 +236,6 @@ pub enum Commands {
         #[arg(short = 'e', long)]
         seed: Option<u64>,
 
-        /// Source port(s) to use
-        #[arg(short = 'o', long)]
-        source_port: Option<String>,
-
         /// Source IP address(es) to use
         #[arg(short = 'S', long)]
         source_ip: Option<String>,
@@ -259,10 +247,6 @@ pub enum Commands {
         /// Type of probe to send
         #[arg(short = 'M', long, value_enum, default_value = "tcp_syn_scan")]
         probe_module: ProbeModule,
-
-        /// Run in dry-run mode (print packets instead of sending)
-        #[arg(short = 'd', long)]
-        dryrun: bool,
     },
     /// Train the TGA
     Train,
