@@ -16,5 +16,9 @@ ipnet = "2.9.0"
 indicatif = { version = "0.17.7", features = ["rayon"] }
 rayon = "1.8"
 
+# Tracing dependencies
+tracing = "0.1"
+tracing-indicatif = "0.3"
+
 [lib]
 path = "src/lib.rs"

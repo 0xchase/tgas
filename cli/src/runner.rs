@@ -6,6 +6,67 @@ use serde::{Serialize, Deserialize};
 use polars::prelude::*;
 use analyze::analysis::{FilterAnalysis, CountAnalysis};
 use tga::TGA;
+use tracing::{info, warn, span, Level};
+use indicatif::{ProgressBar, ProgressStyle};
+
+
+#[derive(Debug)]
+pub enum TargetError {
+    IpAddrParse(std::net::AddrParseError),
+    IpNetParse(ipnet::AddrParseError),
+    DnsResolve(hickory_resolver::error::ResolveError),
+    NoAddressFound,
+}
+
+impl std::fmt::Display for TargetError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            TargetError::IpAddrParse(e) => write!(f, "Failed to parse IP address: {}", e),
+            TargetError::IpNetParse(e) => write!(f, "Failed to parse IP network: {}", e),
+            TargetError::DnsResolve(e) => write!(f, "Failed to resolve hostname: {}", e),
+            TargetError::NoAddressFound => write!(f, "No valid IP addresses found for hostname"),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum Target {
+    SingleIp(IpAddr),
+    Network(IpNet),
+    Hostname(String, Vec<IpAddr>),
+}
+
+impl Target {
+    pub fn parse(input: &str) -> Result<Self, TargetError> {
+        // Try parsing as IP address first
+        if let Ok(ip) = input.parse::<IpAddr>() {
+            return Ok(Target::SingleIp(ip));
+        }
+
+        // Try parsing as CIDR network
+        if let Ok(net) = input.parse::<IpNet>() {
+            return Ok(Target::Network(net));
+        }
+
+        // Try resolving as hostname
+        /*let resolver = AsyncResolver::tokio(
+            ResolverConfig::default(),
+            ResolverOpts::default(),
+        );
+        
+        let response = resolver.lookup_ip(input).await
+            .map_err(TargetError::DnsResolve)?;
+            
+        let addresses: Vec<IpAddr> = response.iter().collect();
+        
+        if addresses.is_empty() {
+            return Err(TargetError::NoAddressFound);
+        }
+
+        Ok(Target::Hostname(input.to_string(), addresses))*/
+        todo!()
+    }
+}
 
 #[derive(Clone, ValueEnum, Serialize, Deserialize)]
 #[value(rename_all = "snake_case")]
@@ -270,7 +331,7 @@ pub enum Commands {
 impl Commands {
     pub fn run(&self) -> Result<DataFrame, String> {
         match self {
-            Commands::Generate { count, unique } => self.run_generate(*count, *unique),
+            Commands::Generate { count, unique } => Self::run_generate(*count, *unique),
             Commands::Scan { scan_type, target, .. } => self.run_scan(scan_type, target),
             Commands::Discover => self.run_discover(),
             Commands::Train => self.run_train(),
@@ -283,39 +344,61 @@ impl Commands {
         }
     }
 
-    fn run_generate(&self, count: usize, unique: bool) -> Result<DataFrame, String> {
-        let seed_ips: Vec<[u8; 16]> = vec![
-            std::net::Ipv6Addr::new(0x2001, 0x0db8, 0x0001, 0x0001, 0, 0, 0, 0x0001).octets(),
-            std::net::Ipv6Addr::new(0x2001, 0x0db8, 0x0001, 0x0001, 0, 0, 0, 0x0002).octets(),
-            std::net::Ipv6Addr::new(0x2001, 0x0db8, 0x0001, 0x0002, 0, 0, 0, 0x0001).octets(),
-            std::net::Ipv6Addr::new(0x2001, 0x0db8, 0x0001, 0x0002, 0, 0, 0, 0x0002).octets(),
-            std::net::Ipv6Addr::new(0x2001, 0x0db8, 0x0002, 0x000a, 0, 0, 0, 0x000a).octets(),
-            std::net::Ipv6Addr::new(0x2001, 0x0db8, 0x0002, 0x000a, 0, 0, 0, 0x000b).octets(),
-            std::net::Ipv6Addr::new(0x2001, 0x0db8, 0x0002, 0x000b, 0, 0, 0, 0x000a).octets(),
-            std::net::Ipv6Addr::new(0x2001, 0x0db8, 0x1111, 0x2222, 0x3333, 0x4444, 0x5555, 0x6666).octets(),
-            std::net::Ipv6Addr::new(0x2001, 0x0db8, 0x1111, 0x2222, 0x3333, 0x4444, 0x5555, 0x6667).octets(),
+    pub fn run_generate(count: usize, unique: bool) -> Result<DataFrame, String> {
+        // Load seed addresses for TGA training
+        let seed_ips = vec![
+            "2001:db8::1".parse::<std::net::Ipv6Addr>().unwrap().octets(),
+            "2001:db8::2".parse::<std::net::Ipv6Addr>().unwrap().octets(),
+            "2001:db8::3".parse::<std::net::Ipv6Addr>().unwrap().octets(),
+            "2001:db8::4".parse::<std::net::Ipv6Addr>().unwrap().octets(),
+            "2001:db8::5".parse::<std::net::Ipv6Addr>().unwrap().octets(),
+            "2001:db8::6".parse::<std::net::Ipv6Addr>().unwrap().octets(),
+            "2001:db8::7".parse::<std::net::Ipv6Addr>().unwrap().octets(),
+            "2001:db8::8".parse::<std::net::Ipv6Addr>().unwrap().octets(),
+            "2001:db8::9".parse::<std::net::Ipv6Addr>().unwrap().octets(),
         ];
+        
         let tga = match tga::EntropyIpTga::train(seed_ips) {
             Ok(tga) => tga,
             Err(e) => return Err(format!("Failed to train model: {}", e)),
         };
+        
+        // Create progress bar for generation
+        let pb = ProgressBar::new(count as u64);
+        pb.set_style(
+            ProgressStyle::default_bar()
+                .template("{elapsed_precise} {msg} [{bar:20.cyan/blue}] {pos}/{len}")
+                .expect("Failed to create progress bar template")
+                .progress_chars("█░")
+        );
+        pb.set_message("Generating IPv6 addresses...");
+        
         let mut generated = std::collections::HashSet::new();
         let mut addresses = Vec::new();
         let mut attempts = 0;
         const MAX_ATTEMPTS: usize = 1_000_000;
-        while addresses.len() < count as usize {
+        
+        while addresses.len() < count {
             let generated_bytes = tga.generate();
             let generated_ip = std::net::Ipv6Addr::from(generated_bytes);
             if !unique || generated.insert(generated_ip) {
                 addresses.push(generated_ip.to_string());
                 attempts = 0;
+                pb.set_position(addresses.len() as u64);
             } else {
                 attempts += 1;
                 if attempts >= MAX_ATTEMPTS {
+                    pb.suspend(|| {
+                        info!("Generation failed - too many duplicate attempts");
+                    });
+                    pb.finish_and_clear();
                     return Err(format!("Could only generate {}/{} unique addresses after {} attempts", addresses.len(), count, MAX_ATTEMPTS));
                 }
             }
         }
+
+        pb.finish_and_clear();
+
         DataFrame::new(vec![Series::new("address".into(), addresses).into()])
             .map_err(|e| format!("Failed to create DataFrame: {}", e))
     }
@@ -325,15 +408,15 @@ impl Commands {
             Some(t) => t,
             None => return Err("Target is required for non-link-local scans".to_string()),
         };
-        let parsed_target = match super::Target::parse(target) {
+        let parsed_target = match Target::parse(target) {
             Ok(t) => t,
             Err(e) => return Err(format!("Failed to parse target: {}", e)),
         };
         let results = match (scan_type, parsed_target) {
-            (ScanType::Icmpv4, super::Target::Network(ipnet::IpNet::V4(net))) => {
+            (ScanType::Icmpv4, Target::Network(ipnet::IpNet::V4(net))) => {
                 scan::icmp6::icmp4_scan(net)
             }
-            (ScanType::Icmpv6, super::Target::Network(ipnet::IpNet::V6(net))) => {
+            (ScanType::Icmpv6, Target::Network(ipnet::IpNet::V6(net))) => {
                 scan::icmp6::icmp6_scan(net)
             }
             (ScanType::LinkLocal, _) => {

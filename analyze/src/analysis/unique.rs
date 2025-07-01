@@ -1,7 +1,8 @@
 use std::net::Ipv6Addr;
 use polars::prelude::*;
 use plugin::contracts::Predicate;
-use indicatif::{ProgressBar, ProgressStyle, ParallelProgressIterator};
+use tracing::{info, warn, span, Level};
+use indicatif::{ProgressBar, ProgressStyle};
 use rayon::prelude::*;
 use crate::analysis::predicates::*;
 
@@ -15,13 +16,17 @@ impl UniqueAnalysis {
     }
 
     pub fn analyze(&self, series: &Series) -> Result<DataFrame, Box<dyn std::error::Error>> {
+        let span = span!(Level::INFO, "unique_analysis", 
+            predicate_name = self.predicate_name.as_deref().unwrap_or("all"));
+        let _enter = span.enter();
+
         // Configure rayon to use up to 8 threads
         rayon::ThreadPoolBuilder::new()
             .num_threads(8)
             .build_global()
             .unwrap_or_else(|_| {
                 // If global pool is already initialized, just continue
-                eprintln!("Warning: Could not set thread pool size (may already be initialized)");
+                warn!("Could not set thread pool size (may already be initialized)");
             });
 
         let all_predicates = get_all_predicates();
@@ -43,6 +48,8 @@ impl UniqueAnalysis {
         // --- 2. Vectorized Parsing (Do this only ONCE) ---
         // Cast the generic Series to its specific Utf8 type
         let utf8_series = series.str().map_err(|e| format!("Failed to convert to string series: {}", e))?;
+
+        info!("Starting IPv6 address parsing for {} addresses", utf8_series.len());
 
         // Create progress bar for parsing phase
         let parse_pb = ProgressBar::new(utf8_series.len() as u64);
@@ -73,12 +80,15 @@ impl UniqueAnalysis {
             }
         }
         parse_pb.finish_with_message("IP address parsing complete!");
+        info!("IP address parsing complete!");
 
         // Filter out None values and get unique addresses
         let unique_addresses: std::collections::HashSet<Ipv6Addr> = parsed_ips
             .into_iter()
             .filter_map(|opt| opt)
             .collect();
+
+        info!("Found {} unique IPv6 addresses", unique_addresses.len());
 
         if unique_addresses.is_empty() {
             // Handle case where no IPs could be parsed.
@@ -98,6 +108,7 @@ impl UniqueAnalysis {
             Series::new("address".into(), address_strings).into(),
         ])?;
 
+        info!("Unique analysis complete");
         Ok(df)
     }
 }

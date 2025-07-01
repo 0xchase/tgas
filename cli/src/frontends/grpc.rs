@@ -11,6 +11,8 @@ use metrics::{counter, histogram, gauge, increment_gauge, decrement_gauge};
 use std::time::Instant;
 use metrics_exporter_prometheus;
 use crate::frontends::cli;
+use tracing::{info, span, Level};
+use indicatif::{ProgressBar, ProgressStyle};
 
 pub mod ipv6kit {
     tonic::include_proto!("ipv6kit");
@@ -74,21 +76,36 @@ impl Ipv6KitService for Ipv6KitServiceImpl {
         &self,
         _request: Request<GenerateRequest>,
     ) -> Result<Response<DataframeResponse>, Status> {
-        Err(Status::unimplemented("Use ExecuteCommand for all commands"))
+        let _span = span!(Level::INFO, "grpc_generate").entered();
+        
+        let result = Err(Status::unimplemented("Use ExecuteCommand for all commands"));
+        
+        info!("Generate command completed");
+        result
     }
 
     async fn scan(
         &self,
         _request: Request<ScanRequest>,
     ) -> Result<Response<DataframeResponse>, Status> {
-        Err(Status::unimplemented("Use ExecuteCommand for all commands"))
+        let _span = span!(Level::INFO, "grpc_scan").entered();
+        
+        let result = Err(Status::unimplemented("Use ExecuteCommand for all commands"));
+        
+        info!("Scan command completed");
+        result
     }
 
     async fn discover(
         &self,
         _request: Request<DiscoverRequest>,
     ) -> Result<Response<DataframeResponse>, Status> {
-        Err(Status::unimplemented("Use ExecuteCommand for all commands"))
+        let _span = span!(Level::INFO, "grpc_discover").entered();
+        
+        let result = Err(Status::unimplemented("Use ExecuteCommand for all commands"));
+        
+        info!("Discover command completed");
+        result
     }
 
     async fn execute_command(
@@ -100,8 +117,6 @@ impl Ipv6KitService for Ipv6KitServiceImpl {
         let command: cli::Commands = match serde_json::from_str(&req.command_json) {
             Ok(cmd) => cmd,
             Err(e) => {
-                self.record_request(false, "execute_command").await;
-                self.record_error("command_deserialization_failed", "execute_command").await;
                 return Ok(Response::new(DataframeResponse {
                     dataframe_json: "".to_string(),
                     success: false,
@@ -116,8 +131,6 @@ impl Ipv6KitService for Ipv6KitServiceImpl {
                 let df_json = match serde_json::to_string(&df) {
                     Ok(json) => json,
                     Err(e) => {
-                        self.record_request(false, "execute_command").await;
-                        self.record_error("dataframe_serialization_failed", "execute_command").await;
                         return Ok(Response::new(DataframeResponse {
                             dataframe_json: "".to_string(),
                             success: false,
@@ -125,8 +138,30 @@ impl Ipv6KitService for Ipv6KitServiceImpl {
                         }));
                     }
                 };
-                self.record_request(true, "execute_command").await;
                 histogram!("ipv6kit_execute_command_duration_ms", duration.as_millis() as f64);
+                
+                // Log completion message based on command type
+                match command {
+                    cli::Commands::Generate { count, unique } => {
+                        info!("Generate command completed: {} addresses, unique: {}", count, unique);
+                    }
+                    cli::Commands::Scan { scan_type, target, .. } => {
+                        info!("Scan command completed: type {:?}, target: {:?}", scan_type, target);
+                    }
+                    cli::Commands::Discover => {
+                        info!("Discover command completed");
+                    }
+                    cli::Commands::View { file, .. } => {
+                        info!("View command completed: file {:?}", file);
+                    }
+                    cli::Commands::Train => {
+                        info!("Train command completed");
+                    }
+                    cli::Commands::Serve { .. } => {
+                        // Serve command is handled separately, shouldn't reach here
+                    }
+                }
+                
                 Ok(Response::new(DataframeResponse {
                     dataframe_json: df_json,
                     success: true,
@@ -134,8 +169,6 @@ impl Ipv6KitService for Ipv6KitServiceImpl {
                 }))
             }
             Err(e) => {
-                self.record_request(false, "execute_command").await;
-                self.record_error("command_execution_failed", "execute_command").await;
                 Ok(Response::new(DataframeResponse {
                     dataframe_json: "".to_string(),
                     success: false,
@@ -182,10 +215,26 @@ pub async fn execute_remote_command(
     server_addr: &str,
     command: &cli::Commands,
 ) -> Result<DataFrame, Box<dyn std::error::Error>> {
+    // Create a progress spinner
+    let pb = ProgressBar::new_spinner();
+    pb.set_style(
+        ProgressStyle::default_spinner()
+            .template("{spinner:.green} {msg}")
+            .unwrap()
+            .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+    );
+    pb.set_message("Connecting to server...");
+    pb.enable_steady_tick(std::time::Duration::from_millis(100));
+    
     let mut client = GrpcClient::new(server_addr.to_string()).await?;
+    
+    pb.set_message("Executing command...");
     let command_json = serde_json::to_string(command)?;
     let request = ExecuteCommandRequest { command_json };
     let response = client.client.execute_command(request).await?;
+    
+    pb.finish_and_clear();
+    
     let response = response.into_inner();
     if !response.success {
         return Err(response.error.into());
