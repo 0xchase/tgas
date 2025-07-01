@@ -255,9 +255,9 @@ impl GrpcClient {
         } else {
             format!("http://{}", addr)
         };
-        //println!("Connecting to gRPC server at: {}", url);
+
         let client = ipv6kit::ipv6_kit_service_client::Ipv6KitServiceClient::connect(url).await?;
-        // println!("✅ Successfully connected to gRPC server");
+
         Ok(GrpcClient { client })
     }
 } 
