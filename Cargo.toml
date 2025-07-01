@@ -2,7 +2,8 @@
 resolver = "3"
 members = [
 	"analyze",
-	"cli", "download",
+	"cli",
+	"resource",
 	"plot",
 	"probe",
 	"scan",
