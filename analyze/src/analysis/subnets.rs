@@ -31,7 +31,9 @@ impl SubnetAnalysis {
         } else {
             addr_u128 >> (128 - self.prefix_length)
         };
-        format!("{:x}/{}", prefix, self.prefix_length)
+        // Convert back to IPv6 address and format properly
+        let subnet_addr = Ipv6Addr::from(prefix << (128 - self.prefix_length));
+        format!("{}/{}", subnet_addr, self.prefix_length)
     }
 }
 
@@ -39,7 +41,7 @@ impl AbsorbField<Ipv6Addr> for SubnetAnalysis {
     type Config = SubnetConfig;
 
     fn absorb(&mut self, addr: Ipv6Addr) {
-        let subnet = format!("{}/{}", addr, self.prefix_length);
+        let subnet = self.get_subnet(&addr);
         *self.subnet_counts.entry(subnet).or_insert(0) += 1;
     }
 

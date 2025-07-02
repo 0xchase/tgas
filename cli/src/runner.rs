@@ -363,7 +363,7 @@ pub enum Commands {
         #[arg(long, value_enum)]
         exclude: Vec<AddressPredicate>,
 
-        /// Filter for unique outputs only
+        /// Remove duplicate addresses from input dataset before analysis
         #[arg(short = 'u', long)]
         unique: bool,
 
@@ -399,7 +399,7 @@ pub enum Commands {
         #[arg(long, value_enum)]
         exclude: Vec<AddressPredicate>,
 
-        /// Filter for unique outputs only
+        /// Remove duplicate addresses from input dataset before analysis
         #[arg(short = 'u', long)]
         unique: bool,
 
