@@ -269,22 +269,12 @@ pub enum AnalyzeCommand {
         #[arg(short = 'l', long, value_parser = clap::value_parser!(u8).range(1..=128), default_value_t = 64)]
         prefix_length: u8,
     },
+    /// Count addresses matching each predicate
+    Counts,
 }
 
 #[derive(Subcommand, Serialize, Deserialize)]
 pub enum Commands {
-    /// Discover new targets by scanning the address space
-    Discover,
-    /// Generate a set of targets
-    Generate {
-        /// Number of addresses to generate
-        #[arg(short = 'n', long, default_value = "10")]
-        count: usize,
-
-        /// Ensure generated addresses are unique
-        #[arg(short = 'u', long)]
-        unique: bool,
-    },
     /// Scan the given address set
     Scan {
         /// Type of scan to perform
@@ -343,6 +333,18 @@ pub enum Commands {
         #[arg(short = 'M', long, value_enum, default_value = "tcp_syn_scan")]
         probe_module: ProbeModule,
     },
+    /// Discover new targets by scanning the address space
+    Discover,
+    /// Generate a set of targets
+    Generate {
+        /// Number of addresses to generate
+        #[arg(short = 'n', long, default_value = "10")]
+        count: usize,
+
+        /// Ensure generated addresses are unique
+        #[arg(short = 'u', long)]
+        unique: bool,
+    },
     /// Train the TGA
     Train,
     /// Analyze data with various metrics
@@ -371,16 +373,6 @@ pub enum Commands {
         #[command(subcommand)]
         analysis: AnalyzeCommand,
     },
-    /// Start gRPC server for remote command execution
-    Serve {
-        /// Server address to bind to (default: 127.0.0.1:50051)
-        #[arg(short = 'a', long, default_value = "127.0.0.1:50051")]
-        addr: String,
-
-        /// Prometheus metrics port (default: 9090, use 0 to disable)
-        #[arg(short = 'm', long, default_value = "9090")]
-        metrics_port: u16,
-    },
     /// View data in an interactive TUI
     View {
         /// Path to file containing data to view
@@ -406,6 +398,16 @@ pub enum Commands {
         /// Show the resulting dataframe in an interactive TUI
         #[arg(long)]
         tui: bool,
+    },
+    /// Start gRPC server for remote command execution
+    Serve {
+        /// Server address to bind to (default: 127.0.0.1:50051)
+        #[arg(short = 'a', long, default_value = "127.0.0.1:50051")]
+        addr: String,
+
+        /// Prometheus metrics port (default: 9090, use 0 to disable)
+        #[arg(short = 'm', long, default_value = "9090")]
+        metrics_port: u16,
     },
 }
 
@@ -775,6 +777,11 @@ impl Commands {
                     max_subnets: *max_subnets,
                     prefix_length: *prefix_length,
                 },
+            )
+            .map_err(|e| e.to_string()),
+            AnalyzeCommand::Counts => crate::analyze::analyze(
+                processed_df,
+                crate::analyze::AnalysisType::Counts,
             )
             .map_err(|e| e.to_string()),
         }
