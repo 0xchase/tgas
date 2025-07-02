@@ -1,9 +1,18 @@
 # Notes
 
-## Monday/Tuesday
-
-- [/] Consolidate analyze, count, and filter commands into "view" command
-- [ ] Run full train->generate->scan->discover with entropy_ip
+- [ ] Implement train command
+- [ ] Implement generate command
+- [ ] Implement scan commmand
+  - Implement dealiasing strategies
+- [ ] Implement discover command
+- [ ] Implement resources
+  - Manage lists of prefixes for countries, ASNs, hitlist, ntp pool, etc (https://github.com/hbn1987/6Scan)
+  - Can add/remove resources by name and reference them in commands
+- [ ] Finish analysis command
+  - Categorize addresses by country
+- [ ] Add a "listen" command
+  - Will monitor incoming web traffic for hosts
+  - Automatically run a scan when a new host is discovered
 
 ## Papers
 
