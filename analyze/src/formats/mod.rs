@@ -21,7 +21,7 @@ pub fn identify_format<R: BufRead>(mut reader: R) -> Result<Format, IoError> {
     if reader.read_line(&mut first_line)? == 0 {
         return Err(IoError::new(
             std::io::ErrorKind::InvalidData,
-            "File is empty"
+            "File is empty",
         ));
     }
 
@@ -39,13 +39,15 @@ pub fn identify_format<R: BufRead>(mut reader: R) -> Result<Format, IoError> {
 
     let trimmed = first_line.trim();
     // Determine format based on content
-    Ok(if trimmed.contains(',') && trimmed.to_lowercase().contains("saddr") {
-        Format::ScanResult
-    } else if trimmed.parse::<IpAddr>().is_ok() {
-        Format::IpList
-    } else if trimmed.contains(',') {
-        Format::ScanResult
-    } else {
-        Format::Unknown
-    })
-} 
+    Ok(
+        if trimmed.contains(',') && trimmed.to_lowercase().contains("saddr") {
+            Format::ScanResult
+        } else if trimmed.parse::<IpAddr>().is_ok() {
+            Format::IpList
+        } else if trimmed.contains(',') {
+            Format::ScanResult
+        } else {
+            Format::Unknown
+        },
+    )
+}

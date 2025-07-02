@@ -1,7 +1,7 @@
-use serde::{Deserialize, Serialize};
-use plugin::contracts::PluginInfo;
 use crate::TGA;
+use plugin::contracts::PluginInfo;
 use rand::Rng;
+use serde::{Deserialize, Serialize};
 
 /// TGA implementation that generates random IPv6 addresses
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -11,12 +11,14 @@ pub struct RandomIpTga {
 
 impl PluginInfo for RandomIpTga {
     const NAME: &'static str = "random_ip";
-    const DESCRIPTION: &'static str = "Random IPv6 address generation using cryptographically secure random bytes";
+    const DESCRIPTION: &'static str =
+        "Random IPv6 address generation using cryptographically secure random bytes";
 }
 
 impl RandomIpTga {
     pub const NAME: &'static str = "random_ip";
-    pub const DESCRIPTION: &'static str = "Random IPv6 address generation using cryptographically secure random bytes";
+    pub const DESCRIPTION: &'static str =
+        "Random IPv6 address generation using cryptographically secure random bytes";
 }
 
 #[typetag::serde]
@@ -52,4 +54,4 @@ inventory::submit! {
         description: RandomIpTga::DESCRIPTION,
         train_fn: random_ip_train_fn,
     }
-} 
+}

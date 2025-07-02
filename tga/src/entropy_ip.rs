@@ -1,7 +1,7 @@
-use rand::distributions::{Distribution, WeightedIndex};
-use std::collections::HashMap;
-use serde::{Serialize, Deserialize};
 use inventory;
+use rand::distributions::{Distribution, WeightedIndex};
+use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 
 use crate::TGA;
 use plugin::contracts::PluginInfo;
@@ -13,7 +13,7 @@ pub struct SegmentValue {
     pub probability: f64,
 }
 
-/// Represents a segment of an IP address as discovered by the algorithm. 
+/// Represents a segment of an IP address as discovered by the algorithm.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Segment {
     pub start_nybble: usize,
@@ -35,7 +35,7 @@ impl PluginInfo for EntropyIpTga {
 
 #[typetag::serde]
 impl TGA for EntropyIpTga {
-    /// Builds the address model from a list of seed IPs. 
+    /// Builds the address model from a list of seed IPs.
     /// This function orchestrates the main steps of the Entropy/IP algorithm.
     fn train<T: IntoIterator<Item = [u8; 16]>>(seeds: T) -> Result<Self, String> {
         let addresses: Vec<u128> = seeds
@@ -51,20 +51,20 @@ impl TGA for EntropyIpTga {
             return Ok(EntropyIpTga { segments: vec![] });
         }
 
-        // STEP 1: Entropy Analysis 
+        // STEP 1: Entropy Analysis
         let entropies = Self::calculate_entropies(&addresses);
 
-        // STEP 2: Address Segmentation 
+        // STEP 2: Address Segmentation
         let mut segments = Self::segment_addresses(&entropies, 16);
 
-        // STEP 3: Segment Mining 
+        // STEP 3: Segment Mining
         Self::mine_segments(&mut segments, &addresses);
 
         // The result is the model containing the learned segments and their probabilities.
         Ok(EntropyIpTga { segments })
     }
 
-    /// Generates a new candidate address based on the probabilistic model. 
+    /// Generates a new candidate address based on the probabilistic model.
     fn generate(&self) -> [u8; 16] {
         let mut rng = rand::thread_rng();
         let mut new_address: u128 = 0;
@@ -119,7 +119,7 @@ impl EntropyIpTga {
         "Entropy/IP algorithm for IPv6 address generation based on entropy analysis and segment mining"
     }
 
-    /// STEP 1: Calculates the normalized Shannon entropy for each 4-bit nybble. 
+    /// STEP 1: Calculates the normalized Shannon entropy for each 4-bit nybble.
     fn calculate_entropies(addresses: &[u128]) -> Vec<f64> {
         let mut entropies = Vec::with_capacity(32);
         let num_addresses = addresses.len() as f64;
@@ -139,13 +139,13 @@ impl EntropyIpTga {
                     entropy -= p * p.log2();
                 }
             }
-            // Normalize entropy. Max entropy for 16 states (0-F) is log2(16) = 4. 
+            // Normalize entropy. Max entropy for 16 states (0-F) is log2(16) = 4.
             entropies.push(entropy / 4.0);
         }
         entropies
     }
 
-    /// STEP 2: Segments addresses based on changes in entropy. 
+    /// STEP 2: Segments addresses based on changes in entropy.
     fn segment_addresses(entropies: &[f64], const_c: usize) -> Vec<Segment> {
         let mut segments = Vec::new();
         let total_nybbles = const_c * 2;
@@ -153,13 +153,13 @@ impl EntropyIpTga {
             return segments;
         }
 
-        // Parameters from the paper 
+        // Parameters from the paper
         let thresholds = [0.025, 0.1, 0.3, 0.5, 0.9];
         let hysteresis = 0.05;
 
         let mut current_segment_start = 0;
 
-        // Rule: Always make bits 1-32 (nybbles 0-7) a separate segment for the /32 prefix. 
+        // Rule: Always make bits 1-32 (nybbles 0-7) a separate segment for the /32 prefix.
         segments.push(Segment {
             start_nybble: 0,
             end_nybble: 7,
@@ -169,7 +169,7 @@ impl EntropyIpTga {
 
         // Iterate through remaining nybbles to find other segment boundaries.
         for i in (current_segment_start + 1)..total_nybbles {
-            // Rule: Always put a boundary after the 64th bit (nybble 15). 
+            // Rule: Always put a boundary after the 64th bit (nybble 15).
             if i == 16 {
                 segments.push(Segment {
                     start_nybble: current_segment_start,
@@ -188,7 +188,7 @@ impl EntropyIpTga {
                 .iter()
                 .any(|&t| (h_prev < t && h_curr >= t) || (h_prev >= t && h_curr < t));
 
-            // ...and the change is significant enough (hysteresis). 
+            // ...and the change is significant enough (hysteresis).
             if crosses_threshold && (h_curr - h_prev).abs() > hysteresis {
                 segments.push(Segment {
                     start_nybble: current_segment_start,
@@ -209,7 +209,7 @@ impl EntropyIpTga {
         segments
     }
 
-    /// STEP 3: Mines popular values and their frequencies for each segment. 
+    /// STEP 3: Mines popular values and their frequencies for each segment.
     fn mine_segments(segments: &mut [Segment], addresses: &[u128]) {
         let total_addresses = addresses.len() as f64;
 
@@ -226,7 +226,7 @@ impl EntropyIpTga {
             }
 
             // Convert counts to probabilities and store them.
-            // This is a simplified version of the paper's mining, focusing on frequent values. 
+            // This is a simplified version of the paper's mining, focusing on frequent values.
             segment.values = value_counts
                 .into_iter()
                 .map(|(value, count)| SegmentValue {

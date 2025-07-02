@@ -1,8 +1,8 @@
-use std::net::Ipv6Addr;
-use std::fmt;
 use hashbrown::HashMap;
-use polars::prelude::*;
 use plugin::contracts::{AbsorbField, MyField};
+use polars::prelude::*;
+use std::fmt;
+use std::net::Ipv6Addr;
 
 #[derive(Default)]
 pub struct StatisticsConfig;
@@ -43,7 +43,8 @@ impl AbsorbField<Ipv6Addr> for StatisticsAnalysis {
             Column::new("unique_count".into(), &[unique_count as u64]),
             Column::new("duplicate_count".into(), &[duplicate_count as u64]),
             Column::new("duplication_ratio".into(), &[duplication_ratio]),
-        ]).unwrap()
+        ])
+        .unwrap()
     }
 }
 
@@ -61,7 +62,11 @@ impl fmt::Display for StatisticsResults {
         writeln!(f, "  Total addresses: {}", self.total_count)?;
         writeln!(f, "  Unique addresses: {}", self.unique_count)?;
         writeln!(f, "  Duplicate addresses: {}", self.duplicate_count)?;
-        writeln!(f, "  Duplication ratio: {:.2}%", self.duplication_ratio * 100.0)?;
+        writeln!(
+            f,
+            "  Duplication ratio: {:.2}%",
+            self.duplication_ratio * 100.0
+        )?;
         Ok(())
     }
 }

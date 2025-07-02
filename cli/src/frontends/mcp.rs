@@ -15,7 +15,10 @@ impl McpFrontend {
     }
 
     /// Handle MCP requests
-    pub async fn handle_request(&self, _request: &str) -> Result<String, Box<dyn std::error::Error>> {
+    pub async fn handle_request(
+        &self,
+        _request: &str,
+    ) -> Result<String, Box<dyn std::error::Error>> {
         // TODO: Implement MCP request handling
         todo!("MCP frontend not yet implemented")
     }
@@ -25,4 +28,4 @@ impl Default for McpFrontend {
     fn default() -> Self {
         Self::new()
     }
-} 
+}

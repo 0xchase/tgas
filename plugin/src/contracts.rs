@@ -1,5 +1,5 @@
-use polars::prelude::*;
 use clap::{ArgMatches, Parser};
+use polars::prelude::*;
 use std::net::{IpAddr, Ipv6Addr};
 
 use crate::Plugin;
@@ -9,7 +9,7 @@ use crate::Plugin;
 macro_rules! plugin {
     (#[plugin(name = $name:expr, description = $desc:expr)] $($rest:tt)*) => {
         $($rest)*
-        
+
         impl PluginInfo for Self {
             const NAME: &'static str = $name;
             const DESCRIPTION: &'static str = $desc;
@@ -38,12 +38,12 @@ pub fn test() {
         .to_owned();
 
     /*let d = dataframe
-        .clone()
-        .lazy()
-        // optional flag to select a column
-        .with_column(col("b").into())
-        .collect()
-        .unwrap();*/
+    .clone()
+    .lazy()
+    // optional flag to select a column
+    .with_column(col("b").into())
+    .collect()
+    .unwrap();*/
 
     // dataframe.replace_or_add("b".into(), data).unwrap();
 

@@ -27,10 +27,10 @@ pub trait Plugin<I, O>: Send + Sync + 'static {
 /// - `parser()` to build the subcommand  
 /// - `factory()` to get a `&'static dyn Plugin<I,O>`
 pub struct PluginRegistration {
-    pub name:   &'static str,
-    pub about:  &'static str,
+    pub name: &'static str,
+    pub about: &'static str,
     pub parser: fn() -> Command,
-    pub factory: fn() -> &'static str 
+    pub factory: fn() -> &'static str,
 }
 
 inventory::collect!(PluginRegistration);
@@ -39,7 +39,7 @@ inventory::collect!(PluginRegistration);
 pub fn iter() -> impl Iterator<Item = &'static PluginRegistration> {
     inventory::iter::<PluginRegistration>
         .into_iter()
-        .collect::<Vec<_>>()   // avoid borrow issues
+        .collect::<Vec<_>>() // avoid borrow issues
         .into_iter()
 }
 
@@ -60,10 +60,7 @@ fn temp_create_plugin() -> &'static str {
 }
 
 /// Dispatches into the right plugin (async).
-pub async fn dispatch(
-    matches: &ArgMatches,
-    df: DataFrame,
-) -> Result<Option<DataFrame>> {
+pub async fn dispatch(matches: &ArgMatches, df: DataFrame) -> Result<Option<DataFrame>> {
     if let Some((sub, sub_m)) = matches.subcommand() {
         if let Some(reg) = lookup(sub) {
             let plugin = (reg.factory)();

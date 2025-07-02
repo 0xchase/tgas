@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-use std::net::Ipv6Addr;
-use std::fmt;
-use polars::prelude::*;
 use plugin::contracts::{AbsorbField, MyField};
+use polars::prelude::*;
+use std::collections::HashMap;
+use std::fmt;
+use std::net::Ipv6Addr;
 
 pub struct ShannonEntropyConfig {
     pub start_bit: u8,
@@ -53,8 +53,12 @@ impl AbsorbField<Ipv6Addr> for ShannonEntropyAnalysis {
         DataFrame::new(vec![
             Column::new("entropy".into(), &[entropy]),
             Column::new("total_bits".into(), &[self.total_bits as u64]),
-            Column::new("bit_distribution".into(), &[format!("{:?}", self.bit_counts)]),
-        ]).unwrap()
+            Column::new(
+                "bit_distribution".into(),
+                &[format!("{:?}", self.bit_counts)],
+            ),
+        ])
+        .unwrap()
     }
 }
 
@@ -69,8 +73,21 @@ impl ShannonEntropyResults {
     pub fn from_dataframe(df: &polars::prelude::DataFrame) -> Self {
         Self {
             entropy: df.column("entropy").unwrap().f64().unwrap().get(0).unwrap(),
-            total_bits: df.column("total_bits").unwrap().u64().unwrap().get(0).unwrap() as usize,
-            bit_distribution: df.column("bit_distribution").unwrap().str().unwrap().get(0).unwrap().to_string(),
+            total_bits: df
+                .column("total_bits")
+                .unwrap()
+                .u64()
+                .unwrap()
+                .get(0)
+                .unwrap() as usize,
+            bit_distribution: df
+                .column("bit_distribution")
+                .unwrap()
+                .str()
+                .unwrap()
+                .get(0)
+                .unwrap()
+                .to_string(),
         }
     }
 }

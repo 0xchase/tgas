@@ -1,6 +1,6 @@
-use std::net::Ipv6Addr;
-use plugin::contracts::{Predicate, PluginInfo};
 use ipnet::Ipv6Net;
+use plugin::contracts::{PluginInfo, Predicate};
+use std::net::Ipv6Addr;
 
 pub struct TeredoPredicate;
 pub struct IetfProtocolPredicate;
@@ -43,7 +43,8 @@ impl Predicate for IetfProtocolPredicate {
 // Port Control Protocol predicate
 impl PluginInfo for PortControlProtocolPredicate {
     const NAME: &'static str = "port_control_protocol_predicate";
-    const DESCRIPTION: &'static str = "Checks if IPv6 address is Port Control Protocol (2001:1::1/128)";
+    const DESCRIPTION: &'static str =
+        "Checks if IPv6 address is Port Control Protocol (2001:1::1/128)";
 }
 
 impl Predicate for PortControlProtocolPredicate {
@@ -113,4 +114,4 @@ impl Predicate for SegmentRoutingPredicate {
         let network: Ipv6Net = "5f00::/16".parse().unwrap();
         network.contains(&addr)
     }
-} 
+}

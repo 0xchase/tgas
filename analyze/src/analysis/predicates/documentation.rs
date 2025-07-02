@@ -1,6 +1,6 @@
-use std::net::Ipv6Addr;
-use plugin::contracts::{Predicate, PluginInfo};
 use ipnet::Ipv6Net;
+use plugin::contracts::{PluginInfo, Predicate};
+use std::net::Ipv6Addr;
 
 pub struct DocumentationPredicate;
 pub struct Documentation2Predicate;
@@ -49,4 +49,4 @@ impl Predicate for BenchmarkingPredicate {
         let network: Ipv6Net = "2001:2::/48".parse().unwrap();
         network.contains(&addr)
     }
-} 
+}

@@ -1,8 +1,8 @@
-use std::collections::HashMap;
-use std::net::Ipv6Addr;
-use std::fmt;
-use polars::prelude::*;
 use plugin::contracts::{AbsorbField, MyField};
+use polars::prelude::*;
+use std::collections::HashMap;
+use std::fmt;
+use std::net::Ipv6Addr;
 
 #[derive(Default)]
 pub struct SubnetConfig {
@@ -50,13 +50,18 @@ impl AbsorbField<Ipv6Addr> for SubnetAnalysis {
         subnets.sort_by(|a, b| b.1.cmp(a.1));
         subnets.truncate(self.max_subnets);
 
-        let subnet_names: Vec<String> = subnets.iter().cloned().map(|(name, _)| name.clone()).collect();
+        let subnet_names: Vec<String> = subnets
+            .iter()
+            .cloned()
+            .map(|(name, _)| name.clone())
+            .collect();
         let counts: Vec<_> = subnets.iter().map(|(_, count)| **count as u64).collect();
 
         DataFrame::new(vec![
             Column::new("subnet".into(), &subnet_names),
             Column::new("count".into(), &counts),
-        ]).unwrap()
+        ])
+        .unwrap()
     }
 }
 
@@ -67,7 +72,12 @@ pub struct SubnetResults {
 
 impl SubnetResults {
     pub fn from_dataframe(df: &polars::prelude::DataFrame) -> Self {
-        let subnets: Vec<_> = df.column("subnet").unwrap().str().unwrap().into_iter()
+        let subnets: Vec<_> = df
+            .column("subnet")
+            .unwrap()
+            .str()
+            .unwrap()
+            .into_iter()
             .zip(df.column("count").unwrap().u64().unwrap().into_iter())
             .map(|(name, count)| (name.unwrap().to_string(), count.unwrap() as usize))
             .collect();

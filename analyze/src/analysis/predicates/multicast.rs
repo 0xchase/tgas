@@ -1,6 +1,6 @@
-use std::net::Ipv6Addr;
-use plugin::contracts::{Predicate, PluginInfo};
 use ipnet::Ipv6Net;
+use plugin::contracts::{PluginInfo, Predicate};
+use std::net::Ipv6Addr;
 
 pub struct IsMulticastPredicate;
 pub struct SolicitedNodeMulticastPredicate;
@@ -23,7 +23,8 @@ impl Predicate for IsMulticastPredicate {
 // Solicited-Node Multicast predicate
 impl PluginInfo for SolicitedNodeMulticastPredicate {
     const NAME: &'static str = "solicited_node_multicast_predicate";
-    const DESCRIPTION: &'static str = "Checks if IPv6 address is a solicited-node multicast address (ff02::1:ff00:0000/104)";
+    const DESCRIPTION: &'static str =
+        "Checks if IPv6 address is a solicited-node multicast address (ff02::1:ff00:0000/104)";
 }
 
 impl Predicate for SolicitedNodeMulticastPredicate {
@@ -33,4 +34,4 @@ impl Predicate for SolicitedNodeMulticastPredicate {
         let network: Ipv6Net = "ff02::1:ff00:0000/104".parse().unwrap();
         network.contains(&addr)
     }
-} 
+}

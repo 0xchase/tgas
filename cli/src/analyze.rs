@@ -1,13 +1,15 @@
+use indicatif::{ProgressBar, ProgressStyle};
+use plugin::contracts::{AbsorbField, MyField};
+use polars::prelude::*;
 use std::fs::File;
 use std::io::{BufRead, Error as IoError};
-use std::net::{Ipv6Addr};
+use std::net::Ipv6Addr;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
-use indicatif::{ProgressBar, ProgressStyle};
-use polars::prelude::*;
-use plugin::contracts::{AbsorbField, MyField};
 
-use analyze::analysis::{DispersionAnalysis, ShannonEntropyAnalysis, StatisticsAnalysis, SubnetAnalysis, UniqueAnalysis};
+use analyze::analysis::{
+    DispersionAnalysis, ShannonEntropyAnalysis, StatisticsAnalysis, SubnetAnalysis, UniqueAnalysis,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnalysisType {
@@ -16,10 +18,7 @@ pub enum AnalysisType {
     /// Address space dispersion metrics (distances between addresses)
     Dispersion,
     /// Information entropy analysis
-    Entropy {
-        start_bit: u8,
-        end_bit: u8,
-    },
+    Entropy { start_bit: u8, end_bit: u8 },
     /// Subnet distribution analysis
     Subnets {
         max_subnets: usize,
@@ -47,7 +46,7 @@ impl ProgressTracker {
             ProgressStyle::default_bar()
                 .template("[{elapsed_precise}] {msg} [{bar:20.cyan/grey}] {bytes}/{total_bytes}")
                 .expect("Failed to create progress bar template")
-                .progress_chars("█░")
+                .progress_chars("█░"),
         );
         pb.set_message(format!("0 {}", item_type));
 
@@ -74,13 +73,14 @@ impl ProgressTracker {
 
     fn update_progress(&mut self) {
         self.pb.set_position(self.bytes_read);
-        self.pb.set_message(format!("Processed {} {}", self.count, self.item_type));
+        self.pb
+            .set_message(format!("Processed {} {}", self.count, self.item_type));
     }
 
     fn finish(mut self, success: bool) {
         // Ensure final progress is shown
         self.update_progress();
-        
+
         if success {
             self.pb.finish_with_message("Processing complete!");
         } else {
@@ -95,12 +95,16 @@ pub fn analyze(df: DataFrame, analysis_type: AnalysisType) -> Result<DataFrame, 
             // For Unique analysis, return the first series result
             if let Some(series) = df.get_columns().first() {
                 let analyzer = UniqueAnalysis::new(None);
-                analyzer.analyze(series.as_series().unwrap())
+                analyzer
+                    .analyze(series.as_series().unwrap())
                     .map_err(|e| IoError::new(std::io::ErrorKind::InvalidData, e.to_string()))
             } else {
-                Err(IoError::new(std::io::ErrorKind::InvalidData, "No data to analyze"))
+                Err(IoError::new(
+                    std::io::ErrorKind::InvalidData,
+                    "No data to analyze",
+                ))
             }
-        },
+        }
         AnalysisType::Dispersion => {
             // For Dispersion analysis, return the first series result
             if let Some(series) = df.get_columns().first() {
@@ -109,9 +113,12 @@ pub fn analyze(df: DataFrame, analysis_type: AnalysisType) -> Result<DataFrame, 
                 let output = analyzer.finalize();
                 Ok(output)
             } else {
-                Err(IoError::new(std::io::ErrorKind::InvalidData, "No data to analyze"))
+                Err(IoError::new(
+                    std::io::ErrorKind::InvalidData,
+                    "No data to analyze",
+                ))
             }
-        },
+        }
         AnalysisType::Entropy { start_bit, end_bit } => {
             // For Entropy analysis, return the first series result
             if let Some(series) = df.get_columns().first() {
@@ -120,10 +127,16 @@ pub fn analyze(df: DataFrame, analysis_type: AnalysisType) -> Result<DataFrame, 
                 let output = analyzer.finalize();
                 Ok(output)
             } else {
-                Err(IoError::new(std::io::ErrorKind::InvalidData, "No data to analyze"))
+                Err(IoError::new(
+                    std::io::ErrorKind::InvalidData,
+                    "No data to analyze",
+                ))
             }
-        },
-        AnalysisType::Subnets { max_subnets, prefix_length } => {
+        }
+        AnalysisType::Subnets {
+            max_subnets,
+            prefix_length,
+        } => {
             // For Subnets analysis, return the first series result
             if let Some(series) = df.get_columns().first() {
                 let mut analyzer = SubnetAnalysis::new_with_options(max_subnets, prefix_length);
@@ -131,15 +144,20 @@ pub fn analyze(df: DataFrame, analysis_type: AnalysisType) -> Result<DataFrame, 
                 let output = analyzer.finalize();
                 Ok(output)
             } else {
-                Err(IoError::new(std::io::ErrorKind::InvalidData, "No data to analyze"))
+                Err(IoError::new(
+                    std::io::ErrorKind::InvalidData,
+                    "No data to analyze",
+                ))
             }
-        },
-        AnalysisType::Special => {
-            Err(IoError::new(std::io::ErrorKind::Unsupported, "Special analysis not yet implemented"))
-        },
-        AnalysisType::Eui64 => {
-            Err(IoError::new(std::io::ErrorKind::Unsupported, "EUI-64 analysis not yet implemented"))
-        },
+        }
+        AnalysisType::Special => Err(IoError::new(
+            std::io::ErrorKind::Unsupported,
+            "Special analysis not yet implemented",
+        )),
+        AnalysisType::Eui64 => Err(IoError::new(
+            std::io::ErrorKind::Unsupported,
+            "EUI-64 analysis not yet implemented",
+        )),
     }
 }
 
@@ -147,13 +165,14 @@ fn analyze_column<A: AbsorbField<Ipv6Addr>>(
     series: &Column,
     analyzer: &mut A,
     total_rows: usize,
-) -> Result<(), IoError>
-{
+) -> Result<(), IoError> {
     let mut tracker = ProgressTracker::new(total_rows as u64, "addresses");
-    for item in series.str().map_err(|e| IoError::new(
-        std::io::ErrorKind::InvalidData,
-        format!("Failed to convert series to string: {}", e)
-    ))? {
+    for item in series.str().map_err(|e| {
+        IoError::new(
+            std::io::ErrorKind::InvalidData,
+            format!("Failed to convert series to string: {}", e),
+        )
+    })? {
         if let Some(addr_str) = item {
             if let Ok(addr) = addr_str.parse::<Ipv6Addr>() {
                 analyzer.absorb(addr);
@@ -162,7 +181,7 @@ fn analyze_column<A: AbsorbField<Ipv6Addr>>(
             tracker.increment(tracker.count as u64);
         }
     }
-    
+
     tracker.finish(true);
     Ok(())
 }

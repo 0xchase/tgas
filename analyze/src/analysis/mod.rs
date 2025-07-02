@@ -1,14 +1,14 @@
-pub mod statistics;
+pub mod count;
 pub mod dispersion;
 pub mod entropy;
-pub mod subnets;
 pub mod predicates;
-pub mod count;
+pub mod statistics;
+pub mod subnets;
 pub mod unique;
 
-pub use statistics::{StatisticsAnalysis, StatisticsResults};
+pub use count::{CountAnalysis, CountResults};
 pub use dispersion::{DispersionAnalysis, DispersionResults};
 pub use entropy::{ShannonEntropyAnalysis, ShannonEntropyResults};
+pub use statistics::{StatisticsAnalysis, StatisticsResults};
 pub use subnets::{SubnetAnalysis, SubnetResults};
-pub use count::{CountAnalysis, CountResults};
 pub use unique::{UniqueAnalysis, UniqueResults};

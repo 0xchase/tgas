@@ -1,9 +1,9 @@
-use std::collections::HashMap;
-use std::net::Ipv6Addr;
-use std::fmt;
-use polars::prelude::*;
-use plugin::contracts::{AbsorbField, MyField};
 use itertools::Itertools;
+use plugin::contracts::{AbsorbField, MyField};
+use polars::prelude::*;
+use std::collections::HashMap;
+use std::fmt;
+use std::net::Ipv6Addr;
 
 #[derive(Debug)]
 pub struct DispersionResults {
@@ -16,10 +16,34 @@ pub struct DispersionResults {
 impl DispersionResults {
     pub fn from_dataframe(df: &polars::prelude::DataFrame) -> Self {
         Self {
-            min_distance: df.column("min_distance").unwrap().u32().unwrap().get(0).unwrap(),
-            max_distance: df.column("max_distance").unwrap().u32().unwrap().get(0).unwrap(),
-            avg_distance: df.column("avg_distance").unwrap().f64().unwrap().get(0).unwrap(),
-            total_pairs: df.column("total_pairs").unwrap().u64().unwrap().get(0).unwrap(),
+            min_distance: df
+                .column("min_distance")
+                .unwrap()
+                .u32()
+                .unwrap()
+                .get(0)
+                .unwrap(),
+            max_distance: df
+                .column("max_distance")
+                .unwrap()
+                .u32()
+                .unwrap()
+                .get(0)
+                .unwrap(),
+            avg_distance: df
+                .column("avg_distance")
+                .unwrap()
+                .f64()
+                .unwrap()
+                .get(0)
+                .unwrap(),
+            total_pairs: df
+                .column("total_pairs")
+                .unwrap()
+                .u64()
+                .unwrap()
+                .get(0)
+                .unwrap(),
         }
     }
 }
@@ -44,7 +68,9 @@ pub struct DispersionAnalysis {
 
 impl DispersionAnalysis {
     pub fn new() -> Self {
-        Self { addresses: Vec::new() }
+        Self {
+            addresses: Vec::new(),
+        }
     }
 }
 
@@ -71,7 +97,11 @@ impl AbsorbField<Ipv6Addr> for DispersionAnalysis {
             pair_count += 1;
         }
 
-        let avg_distance = if pair_count > 0 { total_distance as f64 / pair_count as f64 } else { 0.0 };
+        let avg_distance = if pair_count > 0 {
+            total_distance as f64 / pair_count as f64
+        } else {
+            0.0
+        };
 
         // Clear addresses to free memory
         self.addresses.clear();
@@ -81,6 +111,7 @@ impl AbsorbField<Ipv6Addr> for DispersionAnalysis {
             Column::new("max_distance".into(), &[max_distance]),
             Column::new("avg_distance".into(), &[avg_distance]),
             Column::new("total_pairs".into(), &[pair_count]),
-        ]).unwrap()
+        ])
+        .unwrap()
     }
 }

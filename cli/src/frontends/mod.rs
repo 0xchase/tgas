@@ -1,7 +1,7 @@
 pub mod cli;
-pub mod mcp;
 pub mod grpc;
+pub mod mcp;
 
 pub use cli::*;
+pub use grpc::*;
 pub use mcp::*;
-pub use grpc::*; 

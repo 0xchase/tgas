@@ -1,8 +1,14 @@
-use pnet::packet::icmp::{self, echo_request::MutableEchoRequestPacket, IcmpPacket, IcmpTypes};
-use pnet::packet::icmpv6::{self, echo_request::MutableEchoRequestPacket as MutableIcmpv6EchoRequestPacket, Icmpv6Code, Icmpv6Packet, Icmpv6Types};
 use pnet::packet::Packet;
-use pnet::transport::{self, TransportChannelType, TransportProtocol, TransportSender, TransportReceiver, icmp_packet_iter, icmpv6_packet_iter};
+use pnet::packet::icmp::{self, IcmpPacket, IcmpTypes, echo_request::MutableEchoRequestPacket};
+use pnet::packet::icmpv6::{
+    self, Icmpv6Code, Icmpv6Packet, Icmpv6Types,
+    echo_request::MutableEchoRequestPacket as MutableIcmpv6EchoRequestPacket,
+};
 use pnet::packet::ip::IpNextHeaderProtocols;
+use pnet::transport::{
+    self, TransportChannelType, TransportProtocol, TransportReceiver, TransportSender,
+    icmp_packet_iter, icmpv6_packet_iter,
+};
 use std::net::IpAddr;
 use std::time::Duration;
 
@@ -87,7 +93,8 @@ impl<'a> Iterator for Icmpv6PacketIter<'a> {
 impl Probe<Ipv4Addr> for IcmpProbe {
     const NAME: &'static str = "ICMPv4";
     const DESCRIPTION: &'static str = "ICMPv4 Echo Request probe for IPv4 hosts";
-    const CHANNEL_TYPE: TransportChannelType = TransportChannelType::Layer4(TransportProtocol::Ipv4(IpNextHeaderProtocols::Icmp));
+    const CHANNEL_TYPE: TransportChannelType =
+        TransportChannelType::Layer4(TransportProtocol::Ipv4(IpNextHeaderProtocols::Icmp));
     type PacketIterator<'a> = IcmpPacketIter<'a>;
 
     fn build(&self, _source: Ipv4Addr, _target: Ipv4Addr) -> Result<impl Packet, String> {
@@ -106,18 +113,22 @@ impl Probe<Ipv4Addr> for IcmpProbe {
         icmp_packet.set_payload(&payload);
         let checksum = icmp::checksum(&icmp::IcmpPacket::new(icmp_packet.packet()).unwrap());
         icmp_packet.set_checksum(checksum);
-        icmp::echo_request::EchoRequestPacket::owned(buffer).ok_or("Failed to create owned EchoRequestPacket".to_string())
+        icmp::echo_request::EchoRequestPacket::owned(buffer)
+            .ok_or("Failed to create owned EchoRequestPacket".to_string())
     }
 
     fn packet_iterator<'a>(&self, receiver: &'a mut TransportReceiver) -> Self::PacketIterator<'a> {
-        IcmpPacketIter { inner: icmp_packet_iter(receiver) }
+        IcmpPacketIter {
+            inner: icmp_packet_iter(receiver),
+        }
     }
 }
 
 impl Probe<Ipv6Addr> for IcmpProbe {
     const NAME: &'static str = "ICMPv6";
     const DESCRIPTION: &'static str = "ICMPv6 Echo Request probe for IPv6 hosts";
-    const CHANNEL_TYPE: TransportChannelType = TransportChannelType::Layer4(TransportProtocol::Ipv6(IpNextHeaderProtocols::Icmpv6));
+    const CHANNEL_TYPE: TransportChannelType =
+        TransportChannelType::Layer4(TransportProtocol::Ipv6(IpNextHeaderProtocols::Icmpv6));
     type PacketIterator<'a> = Icmpv6PacketIter<'a>;
 
     fn build(&self, source: Ipv6Addr, target: Ipv6Addr) -> Result<impl Packet, String> {
@@ -133,12 +144,19 @@ impl Probe<Ipv6Addr> for IcmpProbe {
             payload[..4].copy_from_slice(&now.to_be_bytes());
         }
         icmpv6_packet.set_payload(&payload);
-        let checksum = icmpv6::checksum(&icmpv6::Icmpv6Packet::new(icmpv6_packet.packet()).unwrap(), &source, &target);
+        let checksum = icmpv6::checksum(
+            &icmpv6::Icmpv6Packet::new(icmpv6_packet.packet()).unwrap(),
+            &source,
+            &target,
+        );
         icmpv6_packet.set_checksum(checksum);
-        icmpv6::echo_request::EchoRequestPacket::owned(buffer).ok_or("Failed to create owned Icmpv6EchoRequestPacket".to_string())
+        icmpv6::echo_request::EchoRequestPacket::owned(buffer)
+            .ok_or("Failed to create owned Icmpv6EchoRequestPacket".to_string())
     }
 
     fn packet_iterator<'a>(&self, receiver: &'a mut TransportReceiver) -> Self::PacketIterator<'a> {
-        Icmpv6PacketIter { inner: icmpv6_packet_iter(receiver) }
+        Icmpv6PacketIter {
+            inner: icmpv6_packet_iter(receiver),
+        }
     }
 }

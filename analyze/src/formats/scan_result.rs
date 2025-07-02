@@ -27,7 +27,7 @@ impl<R: BufRead> ScanResultIterator<R> {
             type_idx: None,
             header_read: false,
         };
-        
+
         // Read and parse header
         iter.line_buffer.clear();
         match iter.reader.read_line(&mut iter.line_buffer) {
@@ -35,13 +35,14 @@ impl<R: BufRead> ScanResultIterator<R> {
             Ok(_) => {
                 let header = iter.line_buffer.trim();
                 let columns: Vec<&str> = header.split(',').collect();
-                let saddr_idx = columns.iter().position(|&c| c == "saddr")
-                    .ok_or_else(|| IoError::new(
+                let saddr_idx = columns.iter().position(|&c| c == "saddr").ok_or_else(|| {
+                    IoError::new(
                         std::io::ErrorKind::InvalidData,
-                        "No saddr column in CSV header"
-                    ))?;
+                        "No saddr column in CSV header",
+                    )
+                })?;
                 let type_idx = columns.iter().position(|&c| c == "type");
-                
+
                 iter.saddr_idx = saddr_idx;
                 iter.type_idx = type_idx;
                 iter.header_read = true;
@@ -77,20 +78,20 @@ impl<R: BufRead> Iterator for ScanResultIterator<R> {
                         continue; // Skip empty lines and comments
                     }
 
-                    let fields: Vec<String> = line.split(',')
-                        .map(|s| s.trim().to_string())
-                        .collect();
+                    let fields: Vec<String> =
+                        line.split(',').map(|s| s.trim().to_string()).collect();
 
                     if fields.len() <= self.saddr_idx {
                         return Some(Err(IoError::new(
                             std::io::ErrorKind::InvalidData,
-                            format!("Row has fewer fields than expected: {}", line)
+                            format!("Row has fewer fields than expected: {}", line),
                         )));
                     }
 
                     match fields[self.saddr_idx].parse::<Ipv6Addr>() {
                         Ok(addr) => {
-                            let is_active = self.type_idx
+                            let is_active = self
+                                .type_idx
                                 .map(|idx| fields.get(idx).map_or(false, |t| t == "129"))
                                 .unwrap_or(false);
 
@@ -100,14 +101,19 @@ impl<R: BufRead> Iterator for ScanResultIterator<R> {
                                 raw_fields: fields,
                             }));
                         }
-                        Err(e) => return Some(Err(IoError::new(
-                            std::io::ErrorKind::InvalidData,
-                            format!("Failed to parse IPv6 address '{}': {}", fields[self.saddr_idx], e)
-                        ))),
+                        Err(e) => {
+                            return Some(Err(IoError::new(
+                                std::io::ErrorKind::InvalidData,
+                                format!(
+                                    "Failed to parse IPv6 address '{}': {}",
+                                    fields[self.saddr_idx], e
+                                ),
+                            )));
+                        }
                     }
                 }
                 Err(e) => return Some(Err(e)),
             }
         }
     }
-} 
+}

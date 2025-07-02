@@ -43,7 +43,7 @@ pub async fn test_scan() {
 
 pub struct Scanner {
     max_active_probes: usize,
-    new_probe_delay: Option<Duration>
+    new_probe_delay: Option<Duration>,
 }
 
 impl Default for Scanner {
@@ -62,7 +62,7 @@ impl Scanner {
     {
         // The iterator is now part of the state for unfold
         let initial_state = addrs_iter.peekable();
-    
+
         let stream = stream::unfold(
             initial_state, // Pass the peekable iterator as the initial state
             // The closure takes the current state (the iterator)
@@ -74,7 +74,7 @@ impl Scanner {
                         // If an item exists, now consume it
                         let addr = iter_state.next().unwrap();
                         let probe_future = IcmpProbe::execute_probe(addr);
-    
+
                         // If there are more addresses to schedule after this one, sleep.
                         // iter_state.peek() checks the *next* item.
                         if let Some(delay) = self.new_probe_delay {
@@ -93,7 +93,7 @@ impl Scanner {
             },
         )
         .buffer_unordered(self.max_active_probes);
-    
+
         Box::pin(stream) // Pin the resulting stream to make it Unpin
     }
 }

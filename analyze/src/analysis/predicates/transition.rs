@@ -1,6 +1,6 @@
-use std::net::Ipv6Addr;
-use plugin::contracts::{Predicate, PluginInfo};
 use ipnet::Ipv6Net;
+use plugin::contracts::{PluginInfo, Predicate};
+use std::net::Ipv6Addr;
 
 pub struct Ipv4MappedPredicate;
 pub struct Ipv4ToIpv6Predicate;
@@ -25,7 +25,8 @@ impl Predicate for Ipv4MappedPredicate {
 // IPv4 to IPv6 predicate
 impl PluginInfo for Ipv4ToIpv6Predicate {
     const NAME: &'static str = "ipv4_to_ipv6_predicate";
-    const DESCRIPTION: &'static str = "Checks if IPv6 address is IPv4 to IPv6 translation (64:ff9b::/96)";
+    const DESCRIPTION: &'static str =
+        "Checks if IPv6 address is IPv4 to IPv6 translation (64:ff9b::/96)";
 }
 
 impl Predicate for Ipv4ToIpv6Predicate {
@@ -40,7 +41,8 @@ impl Predicate for Ipv4ToIpv6Predicate {
 // Extended IPv4-IPv6 Translation predicate
 impl PluginInfo for ExtendedIpv4Ipv6Predicate {
     const NAME: &'static str = "extended_ipv4_ipv6_predicate";
-    const DESCRIPTION: &'static str = "Checks if IPv6 address is extended IPv4-IPv6 translation (64:ff9b:1::/48)";
+    const DESCRIPTION: &'static str =
+        "Checks if IPv6 address is extended IPv4-IPv6 translation (64:ff9b:1::/48)";
 }
 
 impl Predicate for ExtendedIpv4Ipv6Predicate {
@@ -65,4 +67,4 @@ impl Predicate for Ipv6ToIpv4Predicate {
         let network: Ipv6Net = "2002::/16".parse().unwrap();
         network.contains(&addr)
     }
-} 
+}

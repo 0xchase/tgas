@@ -1,6 +1,6 @@
 use std::io::{BufRead, Error as IoError};
-use std::net::IpAddr;
 use std::mem;
+use std::net::IpAddr;
 
 const INITIAL_BUFFER_SIZE: usize = 48; // Slightly larger than max IPv6 string (39 chars) + newline
 
@@ -48,14 +48,14 @@ impl<R: BufRead> Iterator for IpListIterator<R> {
         loop {
             // Clear buffer without deallocating
             self.line_buffer.clear();
-            
+
             // Read next line
             match self.reader.read_line(&mut self.line_buffer) {
                 Ok(0) => return None, // EOF
                 Ok(n) => {
                     self.total_lines += 1;
                     self.bytes_read += n as u64;
-                    
+
                     // Fast path: check if empty or comment without allocating a new string
                     let line = self.line_buffer.as_bytes();
                     if line.is_empty() || line[0] == b'#' {
@@ -63,16 +63,20 @@ impl<R: BufRead> Iterator for IpListIterator<R> {
                     }
 
                     // Trim in place to avoid allocation
-                    let start = line.iter().position(|&b| !b.is_ascii_whitespace()).unwrap_or(0);
-                    let end = line.iter().rposition(|&b| !b.is_ascii_whitespace()).unwrap_or(0);
+                    let start = line
+                        .iter()
+                        .position(|&b| !b.is_ascii_whitespace())
+                        .unwrap_or(0);
+                    let end = line
+                        .iter()
+                        .rposition(|&b| !b.is_ascii_whitespace())
+                        .unwrap_or(0);
                     if start > end {
                         continue; // Empty line
                     }
 
                     // Get trimmed slice without allocating
-                    let trimmed = unsafe {
-                        std::str::from_utf8_unchecked(&line[start..=end])
-                    };
+                    let trimmed = unsafe { std::str::from_utf8_unchecked(&line[start..=end]) };
 
                     // Parse IP address
                     match trimmed.parse::<IpAddr>() {
@@ -81,7 +85,7 @@ impl<R: BufRead> Iterator for IpListIterator<R> {
                             // Only allocate string for error case
                             return Some(Err(IoError::new(
                                 std::io::ErrorKind::InvalidData,
-                                format!("Failed to parse IP address '{}': {}", trimmed, e)
+                                format!("Failed to parse IP address '{}': {}", trimmed, e),
                             )));
                         }
                     }
@@ -96,4 +100,4 @@ impl<R: BufRead> Iterator for IpListIterator<R> {
         // We can't know the exact size without reading the whole file
         (0, None)
     }
-} 
+}

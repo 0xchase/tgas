@@ -1,9 +1,9 @@
-use std::net::Ipv6Addr;
-use polars::prelude::*;
-use plugin::contracts::Predicate;
-use indicatif::{ProgressBar, ProgressStyle, ParallelProgressIterator};
-use rayon::prelude::*;
 use crate::analysis::predicates::*;
+use indicatif::{ParallelProgressIterator, ProgressBar, ProgressStyle};
+use plugin::contracts::Predicate;
+use polars::prelude::*;
+use rayon::prelude::*;
+use std::net::Ipv6Addr;
 
 pub struct CountAnalysis {
     predicate_name: Option<String>,
@@ -35,14 +35,20 @@ impl CountAnalysis {
         };
 
         if predicates_to_run.is_empty() {
-            let err_msg = self.predicate_name.as_ref()
-                .map_or("No predicates available.".to_string(), |name| format!("No predicate found with name: {}", name));
+            let err_msg = self
+                .predicate_name
+                .as_ref()
+                .map_or("No predicates available.".to_string(), |name| {
+                    format!("No predicate found with name: {}", name)
+                });
             return Err(err_msg.into());
         }
 
         // --- 2. Vectorized Parsing (Do this only ONCE) ---
         // Cast the generic Series to its specific Utf8 type
-        let utf8_series = series.str().map_err(|e| format!("Failed to convert to string series: {}", e))?;
+        let utf8_series = series
+            .str()
+            .map_err(|e| format!("Failed to convert to string series: {}", e))?;
 
         // Create progress bar for parsing phase
         let parse_pb = ProgressBar::new(utf8_series.len() as u64);
@@ -50,7 +56,7 @@ impl CountAnalysis {
             ProgressStyle::default_bar()
                 .template("[{elapsed_precise}] {msg} [{bar:20.cyan/grey}] {pos}/{len}")
                 .expect("Failed to create progress bar template")
-                .progress_chars("█░")
+                .progress_chars("█░"),
         );
         parse_pb.set_message("Parsing IPv6 addresses...");
 
@@ -66,7 +72,7 @@ impl CountAnalysis {
             } else {
                 parsed_ips.push(None);
             }
-            
+
             // Update progress every 1000 items to avoid performance impact
             if i % 1000 == 0 {
                 parse_pb.set_position(i as u64);
@@ -93,18 +99,19 @@ impl CountAnalysis {
             ProgressStyle::default_bar()
                 .template("[{elapsed_precise}] {msg} [{bar:20.cyan/grey}] {pos}/{len}")
                 .expect("Failed to create progress bar template")
-                .progress_chars("█░")
+                .progress_chars("█░"),
         );
         eval_pb.set_message("Evaluating predicates...");
 
         // Convert parsed_ips to Arc for sharing across threads
         let parsed_ips_arc = std::sync::Arc::new(parsed_ips);
-        
+
         let results: Vec<(String, i64, i64, f64)> = predicates_to_run
             .par_iter()
             .progress_with(eval_pb)
             .map(|(name, predicate_fn)| {
-                let count = parsed_ips_arc.iter()
+                let count = parsed_ips_arc
+                    .iter()
                     .filter_map(|opt_addr| opt_addr.as_ref())
                     .filter(|addr| predicate_fn(**addr))
                     .count() as i64;
@@ -113,7 +120,11 @@ impl CountAnalysis {
                     name.to_string(),
                     count,
                     total,
-                    if total > 0 { (count as f64 / total as f64) * 100.0 } else { 0.0 }
+                    if total > 0 {
+                        (count as f64 / total as f64) * 100.0
+                    } else {
+                        0.0
+                    },
                 )
             })
             .collect();
@@ -132,9 +143,13 @@ impl CountAnalysis {
         ])?;
 
         // Filter out rows with count of 0 and sort by count in descending order
-        df = df.lazy()
+        df = df
+            .lazy()
             .filter(col("count").gt(0))
-            .sort_by_exprs([col("count")], SortMultipleOptions::new().with_order_descending(true))
+            .sort_by_exprs(
+                [col("count")],
+                SortMultipleOptions::new().with_order_descending(true),
+            )
             .collect()?;
 
         Ok(df)

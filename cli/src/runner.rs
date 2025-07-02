@@ -1,14 +1,13 @@
-use clap::{Subcommand, ValueEnum};
-use std::path::PathBuf;
-use std::net::IpAddr;
-use ipnet::IpNet;
-use serde::{Serialize, Deserialize};
-use polars::prelude::*;
 use analyze::analysis::predicates::get_all_predicates;
+use clap::{Subcommand, ValueEnum};
+use indicatif::{ProgressBar, ProgressStyle};
+use ipnet::IpNet;
+use polars::prelude::*;
+use serde::{Deserialize, Serialize};
+use std::net::IpAddr;
+use std::path::PathBuf;
 use tga::TGA;
 use tracing::info;
-use indicatif::{ProgressBar, ProgressStyle};
-
 
 #[derive(Debug)]
 pub enum TargetError {
@@ -53,12 +52,12 @@ impl Target {
             ResolverConfig::default(),
             ResolverOpts::default(),
         );
-        
+
         let response = resolver.lookup_ip(input).await
             .map_err(TargetError::DnsResolve)?;
-            
+
         let addresses: Vec<IpAddr> = response.iter().collect();
-        
+
         if addresses.is_empty() {
             return Err(TargetError::NoAddressFound);
         }
@@ -156,22 +155,22 @@ pub enum AddressPredicate {
     Unspecified,
     LinkLocal,
     UniqueLocal,
-    
+
     // Multicast predicates
     Multicast,
     SolicitedNode,
-    
+
     // Transition predicates
     Ipv4Mapped,
     Ipv4ToIpv6,
     ExtendedIpv4,
     Ipv6ToIpv4,
-    
+
     // Documentation predicates
     Documentation,
     Documentation2,
     Benchmarking,
-    
+
     // Protocol predicates
     Teredo,
     IetfProtocol,
@@ -180,7 +179,7 @@ pub enum AddressPredicate {
     DnsSd,
     Amt,
     SegmentRouting,
-    
+
     // Special purpose predicates
     DiscardOnly,
     DummyPrefix,
@@ -189,7 +188,7 @@ pub enum AddressPredicate {
     DeprecatedOrchid,
     OrchidV2,
     DroneRemoteId,
-    
+
     // EUI-64 predicates
     Eui64,
     LowByteHost,
@@ -204,22 +203,22 @@ impl AddressPredicate {
             AddressPredicate::Unspecified => "unspecified",
             AddressPredicate::LinkLocal => "link_local",
             AddressPredicate::UniqueLocal => "unique_local",
-            
+
             // Multicast predicates
             AddressPredicate::Multicast => "multicast",
             AddressPredicate::SolicitedNode => "solicited_node",
-            
+
             // Transition predicates
             AddressPredicate::Ipv4Mapped => "ipv4_mapped",
             AddressPredicate::Ipv4ToIpv6 => "ipv4_to_ipv6",
             AddressPredicate::ExtendedIpv4 => "extended_ipv4",
             AddressPredicate::Ipv6ToIpv4 => "ipv6_to_ipv4",
-            
+
             // Documentation predicates
             AddressPredicate::Documentation => "documentation",
             AddressPredicate::Documentation2 => "documentation2",
             AddressPredicate::Benchmarking => "benchmarking",
-            
+
             // Protocol predicates
             AddressPredicate::Teredo => "teredo",
             AddressPredicate::IetfProtocol => "ietf_protocol",
@@ -228,7 +227,7 @@ impl AddressPredicate {
             AddressPredicate::DnsSd => "dns_sd",
             AddressPredicate::Amt => "amt",
             AddressPredicate::SegmentRouting => "segment_routing",
-            
+
             // Special purpose predicates
             AddressPredicate::DiscardOnly => "discard_only",
             AddressPredicate::DummyPrefix => "dummy_prefix",
@@ -237,11 +236,12 @@ impl AddressPredicate {
             AddressPredicate::DeprecatedOrchid => "deprecated_orchid",
             AddressPredicate::OrchidV2 => "orchid_v2",
             AddressPredicate::DroneRemoteId => "drone_remote_id",
-            
+
             // EUI-64 predicates
             AddressPredicate::Eui64 => "eui64",
             AddressPredicate::LowByteHost => "low_byte_host",
-        }.to_string()
+        }
+        .to_string()
     }
 }
 
@@ -376,7 +376,7 @@ pub enum Commands {
         /// Server address to bind to (default: 127.0.0.1:50051)
         #[arg(short = 'a', long, default_value = "127.0.0.1:50051")]
         addr: String,
-        
+
         /// Prometheus metrics port (default: 9090, use 0 to disable)
         #[arg(short = 'm', long, default_value = "9090")]
         metrics_port: u16,
@@ -413,55 +413,92 @@ impl Commands {
     pub fn run(&self) -> Result<DataFrame, String> {
         match self {
             Commands::Generate { count, unique } => Self::run_generate(*count, *unique),
-            Commands::Scan { scan_type, target, .. } => self.run_scan(scan_type, target),
+            Commands::Scan {
+                scan_type, target, ..
+            } => self.run_scan(scan_type, target),
             Commands::Discover => self.run_discover(),
             Commands::Train => self.run_train(),
-            Commands::View { file, field, include, exclude, unique, tui: _ } => {
-                self.run_view(file, field, include, exclude, unique)
-            }
-            Commands::Analyze { file, field, include, exclude, unique, analysis } => {
-                self.run_analyze(file, field, include, exclude, unique, analysis)
-            }
-            Commands::Serve { .. } => {
-                Err("Serve command cannot be executed remotely".to_string())
-            }
+            Commands::View {
+                file,
+                field,
+                include,
+                exclude,
+                unique,
+                tui: _,
+            } => self.run_view(file, field, include, exclude, unique),
+            Commands::Analyze {
+                file,
+                field,
+                include,
+                exclude,
+                unique,
+                analysis,
+            } => self.run_analyze(file, field, include, exclude, unique, analysis),
+            Commands::Serve { .. } => Err("Serve command cannot be executed remotely".to_string()),
         }
     }
 
     pub fn run_generate(count: usize, unique: bool) -> Result<DataFrame, String> {
         // Load seed addresses for TGA training
         let seed_ips = vec![
-            "2001:db8::1".parse::<std::net::Ipv6Addr>().unwrap().octets(),
-            "2001:db8::2".parse::<std::net::Ipv6Addr>().unwrap().octets(),
-            "2001:db8::3".parse::<std::net::Ipv6Addr>().unwrap().octets(),
-            "2001:db8::4".parse::<std::net::Ipv6Addr>().unwrap().octets(),
-            "2001:db8::5".parse::<std::net::Ipv6Addr>().unwrap().octets(),
-            "2001:db8::6".parse::<std::net::Ipv6Addr>().unwrap().octets(),
-            "2001:db8::7".parse::<std::net::Ipv6Addr>().unwrap().octets(),
-            "2001:db8::8".parse::<std::net::Ipv6Addr>().unwrap().octets(),
-            "2001:db8::9".parse::<std::net::Ipv6Addr>().unwrap().octets(),
+            "2001:db8::1"
+                .parse::<std::net::Ipv6Addr>()
+                .unwrap()
+                .octets(),
+            "2001:db8::2"
+                .parse::<std::net::Ipv6Addr>()
+                .unwrap()
+                .octets(),
+            "2001:db8::3"
+                .parse::<std::net::Ipv6Addr>()
+                .unwrap()
+                .octets(),
+            "2001:db8::4"
+                .parse::<std::net::Ipv6Addr>()
+                .unwrap()
+                .octets(),
+            "2001:db8::5"
+                .parse::<std::net::Ipv6Addr>()
+                .unwrap()
+                .octets(),
+            "2001:db8::6"
+                .parse::<std::net::Ipv6Addr>()
+                .unwrap()
+                .octets(),
+            "2001:db8::7"
+                .parse::<std::net::Ipv6Addr>()
+                .unwrap()
+                .octets(),
+            "2001:db8::8"
+                .parse::<std::net::Ipv6Addr>()
+                .unwrap()
+                .octets(),
+            "2001:db8::9"
+                .parse::<std::net::Ipv6Addr>()
+                .unwrap()
+                .octets(),
         ];
-        
+
         let tga = match tga::EntropyIpTga::train(seed_ips) {
             Ok(tga) => tga,
             Err(e) => return Err(format!("Failed to train model: {}", e)),
         };
-        
+
         // Create progress bar for generation
         let pb = ProgressBar::new(count as u64);
         pb.set_style(
             ProgressStyle::default_bar()
                 .template("{elapsed_precise} {msg} [{bar:20.cyan/blue}] {pos}/{len}")
                 .expect("Failed to create progress bar template")
-                .progress_chars("█░")
+                .progress_chars("█░"),
         );
         pb.set_message("Generating IPv6 addresses...");
-        
+
         let mut generated = std::collections::HashSet::new();
         let mut addresses = Vec::new();
         let mut attempts = 0;
         const MAX_ATTEMPTS: usize = 1_000_000;
-        
+
         while addresses.len() < count {
             let generated_bytes = tga.generate();
             let generated_ip = std::net::Ipv6Addr::from(generated_bytes);
@@ -476,7 +513,12 @@ impl Commands {
                         info!("Generation failed - too many duplicate attempts");
                     });
                     pb.finish_and_clear();
-                    return Err(format!("Could only generate {}/{} unique addresses after {} attempts", addresses.len(), count, MAX_ATTEMPTS));
+                    return Err(format!(
+                        "Could only generate {}/{} unique addresses after {} attempts",
+                        addresses.len(),
+                        count,
+                        MAX_ATTEMPTS
+                    ));
                 }
             }
         }
@@ -506,12 +548,13 @@ impl Commands {
             (ScanType::LinkLocal, _) => {
                 let hosts = scan::link_local::discover_all_ipv6_link_local()
                     .map_err(|e| format!("Discovery failed: {}", e))?;
-                hosts.into_iter().map(|host| {
-                    scan::icmp6::ProbeResult {
+                hosts
+                    .into_iter()
+                    .map(|host| scan::icmp6::ProbeResult {
                         addr: std::net::IpAddr::V6(host),
                         rtt: std::time::Duration::from_millis(0),
-                    }
-                }).collect()
+                    })
+                    .collect()
             }
             _ => return Err("Unsupported scan type and target combination".to_string()),
         };
@@ -520,24 +563,27 @@ impl Commands {
         DataFrame::new(vec![
             Series::new("address".into(), addresses).into(),
             Series::new("rtt_ms".into(), rtts).into(),
-        ]).map_err(|e| format!("Failed to create DataFrame: {}", e))
+        ])
+        .map_err(|e| format!("Failed to create DataFrame: {}", e))
     }
 
     fn run_discover(&self) -> Result<DataFrame, String> {
         let hosts = scan::link_local::discover_all_ipv6_link_local()
             .map_err(|e| format!("Discovery failed: {}", e))?;
-        let results: Vec<scan::icmp6::ProbeResult> = hosts.into_iter().map(|host| {
-            scan::icmp6::ProbeResult {
+        let results: Vec<scan::icmp6::ProbeResult> = hosts
+            .into_iter()
+            .map(|host| scan::icmp6::ProbeResult {
                 addr: std::net::IpAddr::V6(host),
                 rtt: std::time::Duration::from_millis(0),
-            }
-        }).collect();
+            })
+            .collect();
         let addresses: Vec<String> = results.iter().map(|r| r.addr.to_string()).collect();
         let rtts: Vec<u64> = results.iter().map(|r| r.rtt.as_millis() as u64).collect();
         DataFrame::new(vec![
             Series::new("address".into(), addresses).into(),
             Series::new("rtt_ms".into(), rtts).into(),
-        ]).map_err(|e| format!("Failed to create DataFrame: {}", e))
+        ])
+        .map_err(|e| format!("Failed to create DataFrame: {}", e))
     }
 
     fn run_train(&self) -> Result<DataFrame, String> {
@@ -546,39 +592,57 @@ impl Commands {
             .map_err(|e| format!("Failed to create DataFrame: {}", e))
     }
 
-    fn run_view(&self, file: &PathBuf, field: &Option<String>, include: &Vec<AddressPredicate>, exclude: &Vec<AddressPredicate>, unique: &bool) -> Result<DataFrame, String> {
+    fn run_view(
+        &self,
+        file: &PathBuf,
+        field: &Option<String>,
+        include: &Vec<AddressPredicate>,
+        exclude: &Vec<AddressPredicate>,
+        unique: &bool,
+    ) -> Result<DataFrame, String> {
         let df = crate::source::load_file(file, field);
         let processed_df = self.apply_filter_and_unique(df, include, exclude, unique)?;
         Ok(processed_df)
     }
 
-    fn apply_filter_and_unique(&self, df: DataFrame, include: &Vec<AddressPredicate>, exclude: &Vec<AddressPredicate>, unique: &bool) -> Result<DataFrame, String> {
+    fn apply_filter_and_unique(
+        &self,
+        df: DataFrame,
+        include: &Vec<AddressPredicate>,
+        exclude: &Vec<AddressPredicate>,
+        unique: &bool,
+    ) -> Result<DataFrame, String> {
         let mut processed_df = df;
-        
+
         // Apply include filters first
         for predicate in include {
             processed_df = self.apply_filter(processed_df, predicate, true)?;
         }
-        
+
         // Apply exclude filters
         for predicate in exclude {
             processed_df = self.apply_filter(processed_df, predicate, false)?;
         }
-        
+
         // Apply unique filtering if requested
         if *unique {
             processed_df = self.apply_unique(processed_df)?;
         }
-        
+
         Ok(processed_df)
     }
 
-    fn apply_filter(&self, df: DataFrame, filter_predicate: &AddressPredicate, include: bool) -> Result<DataFrame, String> {
+    fn apply_filter(
+        &self,
+        df: DataFrame,
+        filter_predicate: &AddressPredicate,
+        include: bool,
+    ) -> Result<DataFrame, String> {
         // Check if dataframe is empty
         if df.height() == 0 {
             return Ok(df);
         }
-        
+
         let filter_name = filter_predicate.to_filter_name();
         let all_predicates = get_all_predicates();
         let predicate_fn = all_predicates
@@ -595,19 +659,24 @@ impl Commands {
             columns[0].as_series().unwrap()
         };
 
-        let utf8_series = series.str().map_err(|e| format!("Failed to convert to string series: {}", e))?;
-        
+        let utf8_series = series
+            .str()
+            .map_err(|e| format!("Failed to convert to string series: {}", e))?;
+
         // Create progress bar for filtering
         let filter_pb = ProgressBar::new(utf8_series.len() as u64);
         filter_pb.set_style(
             ProgressStyle::default_bar()
                 .template("[{elapsed_precise}] {msg} [{bar:20.cyan/blue}] {pos}/{len}")
                 .expect("Failed to create progress bar template")
-                .progress_chars("█░")
+                .progress_chars("█░"),
         );
         let mode = if include { "Including" } else { "Excluding" };
-        filter_pb.set_message(format!("{} addresses with predicate: {}", mode, filter_name));
-        
+        filter_pb.set_message(format!(
+            "{} addresses with predicate: {}",
+            mode, filter_name
+        ));
+
         // Parse IP addresses and collect filtered results
         let mut filtered_addresses = Vec::new();
         for (i, opt_str) in utf8_series.into_iter().enumerate() {
@@ -619,69 +688,95 @@ impl Commands {
                     }
                 }
             }
-            
+
             // Update progress every 1000 items to avoid performance impact
             if i % 1000 == 0 {
                 filter_pb.set_position(i as u64);
             }
         }
-        
-        filter_pb.finish_with_message(format!("{} complete! Found {} matching addresses", mode, filtered_addresses.len()));
+
+        filter_pb.finish_with_message(format!(
+            "{} complete! Found {} matching addresses",
+            mode,
+            filtered_addresses.len()
+        ));
 
         // Create the filtered DataFrame
         DataFrame::new(vec![
             Series::new("address".into(), filtered_addresses).into(),
-        ]).map_err(|e| format!("Failed to create filtered DataFrame: {}", e))
+        ])
+        .map_err(|e| format!("Failed to create filtered DataFrame: {}", e))
     }
 
     fn apply_unique(&self, df: DataFrame) -> Result<DataFrame, String> {
         let total_rows = df.height();
-        
+
         // Create progress bar for unique operation
         let unique_pb = ProgressBar::new(total_rows as u64);
         unique_pb.set_style(
             ProgressStyle::default_spinner()
                 .template("[{elapsed_precise}] {msg} {spinner}")
                 .expect("Failed to create progress bar template")
-                .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+                .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"),
         );
         unique_pb.set_message("Removing duplicate addresses...");
-        
+
         // Apply unique filtering
-        let result = df.unique::<Vec<String>, Vec<String>>(None, UniqueKeepStrategy::First, None)
+        let result = df
+            .unique::<Vec<String>, Vec<String>>(None, UniqueKeepStrategy::First, None)
             .map_err(|e| format!("Failed to apply unique filter: {}", e))?;
-        
+
         let unique_count = result.height();
-        unique_pb.finish_with_message(format!("Unique filtering complete! Reduced from {} to {} addresses", total_rows, unique_count));
-        
+        unique_pb.finish_with_message(format!(
+            "Unique filtering complete! Reduced from {} to {} addresses",
+            total_rows, unique_count
+        ));
+
         Ok(result)
     }
 
-    fn run_analyze(&self, file: &PathBuf, field: &Option<String>, include: &Vec<AddressPredicate>, exclude: &Vec<AddressPredicate>, unique: &bool, analysis: &AnalyzeCommand) -> Result<DataFrame, String> {
+    fn run_analyze(
+        &self,
+        file: &PathBuf,
+        field: &Option<String>,
+        include: &Vec<AddressPredicate>,
+        exclude: &Vec<AddressPredicate>,
+        unique: &bool,
+        analysis: &AnalyzeCommand,
+    ) -> Result<DataFrame, String> {
         let df = crate::source::load_file(file, field);
         let processed_df = self.apply_filter_and_unique(df, include, exclude, unique)?;
-        
+
         // Run the analysis and return the results DataFrame
         match analysis {
             AnalyzeCommand::Dispersion => {
                 crate::analyze::analyze(processed_df, crate::analyze::AnalysisType::Dispersion)
                     .map_err(|e| e.to_string())
-            },
+            }
             AnalyzeCommand::Entropy { start_bit, end_bit } => {
                 if start_bit >= end_bit {
                     return Err("start_bit must be less than end_bit".to_string());
                 }
-                crate::analyze::analyze(processed_df, crate::analyze::AnalysisType::Entropy {
-                    start_bit: *start_bit,
-                    end_bit: *end_bit,
-                }).map_err(|e| e.to_string())
-            },
-            AnalyzeCommand::Subnets { max_subnets, prefix_length } => {
-                crate::analyze::analyze(processed_df, crate::analyze::AnalysisType::Subnets {
+                crate::analyze::analyze(
+                    processed_df,
+                    crate::analyze::AnalysisType::Entropy {
+                        start_bit: *start_bit,
+                        end_bit: *end_bit,
+                    },
+                )
+                .map_err(|e| e.to_string())
+            }
+            AnalyzeCommand::Subnets {
+                max_subnets,
+                prefix_length,
+            } => crate::analyze::analyze(
+                processed_df,
+                crate::analyze::AnalysisType::Subnets {
                     max_subnets: *max_subnets,
                     prefix_length: *prefix_length,
-                }).map_err(|e| e.to_string())
-            },
+                },
+            )
+            .map_err(|e| e.to_string()),
         }
     }
 }

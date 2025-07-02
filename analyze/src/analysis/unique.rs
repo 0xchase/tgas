@@ -1,10 +1,10 @@
-use std::net::Ipv6Addr;
-use polars::prelude::*;
-use plugin::contracts::Predicate;
-use tracing::{info, warn, span, Level};
-use indicatif::{ProgressBar, ProgressStyle};
-use rayon::prelude::*;
 use crate::analysis::predicates::*;
+use indicatif::{ProgressBar, ProgressStyle};
+use plugin::contracts::Predicate;
+use polars::prelude::*;
+use rayon::prelude::*;
+use std::net::Ipv6Addr;
+use tracing::{Level, info, span, warn};
 
 pub struct UniqueAnalysis {
     predicate_name: Option<String>,
@@ -16,8 +16,11 @@ impl UniqueAnalysis {
     }
 
     pub fn analyze(&self, series: &Series) -> Result<DataFrame, Box<dyn std::error::Error>> {
-        let span = span!(Level::INFO, "unique_analysis", 
-            predicate_name = self.predicate_name.as_deref().unwrap_or("all"));
+        let span = span!(
+            Level::INFO,
+            "unique_analysis",
+            predicate_name = self.predicate_name.as_deref().unwrap_or("all")
+        );
         let _enter = span.enter();
 
         // Configure rayon to use up to 8 threads
@@ -40,16 +43,25 @@ impl UniqueAnalysis {
         };
 
         if predicates_to_run.is_empty() {
-            let err_msg = self.predicate_name.as_ref()
-                .map_or("No predicates available.".to_string(), |name| format!("No predicate found with name: {}", name));
+            let err_msg = self
+                .predicate_name
+                .as_ref()
+                .map_or("No predicates available.".to_string(), |name| {
+                    format!("No predicate found with name: {}", name)
+                });
             return Err(err_msg.into());
         }
 
         // --- 2. Vectorized Parsing (Do this only ONCE) ---
         // Cast the generic Series to its specific Utf8 type
-        let utf8_series = series.str().map_err(|e| format!("Failed to convert to string series: {}", e))?;
+        let utf8_series = series
+            .str()
+            .map_err(|e| format!("Failed to convert to string series: {}", e))?;
 
-        info!("Starting IPv6 address parsing for {} addresses", utf8_series.len());
+        info!(
+            "Starting IPv6 address parsing for {} addresses",
+            utf8_series.len()
+        );
 
         // Create progress bar for parsing phase
         let parse_pb = ProgressBar::new(utf8_series.len() as u64);
@@ -57,7 +69,7 @@ impl UniqueAnalysis {
             ProgressStyle::default_bar()
                 .template("[{elapsed_precise}] {msg} [{bar:20.cyan/grey}] {pos}/{len}")
                 .expect("Failed to create progress bar template")
-                .progress_chars("█░")
+                .progress_chars("█░"),
         );
         parse_pb.set_message("Parsing IPv6 addresses...");
 
@@ -73,7 +85,7 @@ impl UniqueAnalysis {
             } else {
                 parsed_ips.push(None);
             }
-            
+
             // Update progress every 1000 items to avoid performance impact
             if i % 1000 == 0 {
                 parse_pb.set_position(i as u64);
@@ -83,10 +95,8 @@ impl UniqueAnalysis {
         info!("IP address parsing complete!");
 
         // Filter out None values and get unique addresses
-        let unique_addresses: std::collections::HashSet<Ipv6Addr> = parsed_ips
-            .into_iter()
-            .filter_map(|opt| opt)
-            .collect();
+        let unique_addresses: std::collections::HashSet<Ipv6Addr> =
+            parsed_ips.into_iter().filter_map(|opt| opt).collect();
 
         info!("Found {} unique IPv6 addresses", unique_addresses.len());
 
@@ -104,9 +114,7 @@ impl UniqueAnalysis {
             .collect();
 
         // Create the final DataFrame with unique addresses
-        let df = DataFrame::new(vec![
-            Series::new("address".into(), address_strings).into(),
-        ])?;
+        let df = DataFrame::new(vec![Series::new("address".into(), address_strings).into()])?;
 
         info!("Unique analysis complete");
         Ok(df)
@@ -121,4 +129,4 @@ impl UniqueResults {
     pub fn new(dataframe: DataFrame) -> Self {
         Self { dataframe }
     }
-} 
+}

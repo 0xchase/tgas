@@ -1,17 +1,15 @@
 use pnet::datalink::{self, NetworkInterface};
+use pnet::packet::Packet;
 use pnet::packet::icmpv6::echo_request::{self, MutableEchoRequestPacket};
 use pnet::packet::icmpv6::{self as icmpv6, Icmpv6Types, MutableIcmpv6Packet};
 use pnet::packet::ip::IpNextHeaderProtocols;
-use pnet::packet::Packet;
-use pnet::transport::{
-    self, icmpv6_packet_iter, TransportChannelType, TransportProtocol,
-};
+use pnet::transport::{self, TransportChannelType, TransportProtocol, icmpv6_packet_iter};
 
+use metrics::{counter, gauge};
 use std::net::{IpAddr, Ipv6Addr};
 use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::Duration;
-use metrics::{counter, gauge};
 
 /// Discovers IPv6 hosts on the local network segment using ICMPv6 multicast.
 ///
@@ -27,15 +25,25 @@ pub fn discover_ipv6_link_local(interface: &NetworkInterface) -> Result<Vec<Ipv6
     let source_ipv6 = interface
         .ips
         .iter()
-        .find(|ip| ip.is_ipv6() && match ip.ip() {
-            IpAddr::V6(addr) => addr.octets()[0] == 0xfe && (addr.octets()[1] & 0xc0) == 0x80, // Link-local addresses start with fe80::/10
-            _ => false,
+        .find(|ip| {
+            ip.is_ipv6()
+                && match ip.ip() {
+                    IpAddr::V6(addr) => {
+                        addr.octets()[0] == 0xfe && (addr.octets()[1] & 0xc0) == 0x80
+                    } // Link-local addresses start with fe80::/10
+                    _ => false,
+                }
         })
         .map(|ip| match ip.ip() {
             IpAddr::V6(addr) => addr,
             _ => unreachable!(),
         })
-        .ok_or_else(|| format!("No suitable IPv6 link-local address found on interface {}", interface.name))?;
+        .ok_or_else(|| {
+            format!(
+                "No suitable IPv6 link-local address found on interface {}",
+                interface.name
+            )
+        })?;
 
     // The target is the "all-nodes" link-local multicast address.
     let target_addr = Ipv6Addr::new(0xff02, 0, 0, 0, 0, 0, 0, 1);
@@ -48,7 +56,10 @@ pub fn discover_ipv6_link_local(interface: &NetworkInterface) -> Result<Vec<Ipv6
     .map_err(|e| format!("Failed to create transport channel: {}", e))?;
 
     println!("Using source address: {}", source_ipv6);
-    println!("Sending discovery packet to multicast address: {}", target_addr);
+    println!(
+        "Sending discovery packet to multicast address: {}",
+        target_addr
+    );
 
     // We will store discovered hosts in a thread-safe Set-like structure to avoid duplicates.
     let discovered_hosts = Arc::new(Mutex::new(std::collections::HashSet::new()));
@@ -64,7 +75,9 @@ pub fn discover_ipv6_link_local(interface: &NetworkInterface) -> Result<Vec<Ipv6
                 Ok(Some((packet, addr))) => {
                     // We've received a packet, check if it's an Echo Reply.
                     if packet.get_icmpv6_type() == Icmpv6Types::EchoReply {
-                        if let Some(echo_reply) = icmpv6::echo_reply::EchoReplyPacket::new(packet.packet()) {
+                        if let Some(echo_reply) =
+                            icmpv6::echo_reply::EchoReplyPacket::new(packet.packet())
+                        {
                             // Check if it's a reply to our specific probe.
                             if echo_reply.get_identifier() == 0x1337 {
                                 println!("> Received reply from: {}", addr);
@@ -114,12 +127,15 @@ pub fn discover_ipv6_link_local(interface: &NetworkInterface) -> Result<Vec<Ipv6
     // The listening period is over. We can now collect the results.
     // The receiver thread will exit on its next timeout.
     // We don't strictly need to join it, but it's good practice if we care about its shutdown.
-    
+
     let hosts = discovered_hosts.lock().unwrap();
-    let mut results: Vec<Ipv6Addr> = hosts.iter().map(|ip| match ip {
-        IpAddr::V6(addr) => *addr,
-        _ => unreachable!(),
-    }).collect();
+    let mut results: Vec<Ipv6Addr> = hosts
+        .iter()
+        .map(|ip| match ip {
+            IpAddr::V6(addr) => *addr,
+            _ => unreachable!(),
+        })
+        .collect();
 
     // Sort the results for consistent output.
     results.sort();
@@ -133,10 +149,12 @@ pub fn discover_ipv6_link_local(interface: &NetworkInterface) -> Result<Vec<Ipv6
 /// A `Vec` of `NetworkInterface`s that are up, not loopback, and have IPv6 addresses.
 pub fn get_usable_interfaces() -> Vec<NetworkInterface> {
     let all_interfaces = datalink::interfaces();
-    
+
     all_interfaces
         .into_iter()
-        .filter(|iface| iface.is_up() && !iface.is_loopback() && iface.ips.iter().any(|ip| ip.is_ipv6()))
+        .filter(|iface| {
+            iface.is_up() && !iface.is_loopback() && iface.ips.iter().any(|ip| ip.is_ipv6())
+        })
         .collect()
 }
 
@@ -149,16 +167,16 @@ pub fn discover_all_ipv6_link_local() -> Result<Vec<Ipv6Addr>, String> {
     // Record discovery start
     counter!("ipv6kit_link_local_discoveries_total", 1);
     gauge!("ipv6kit_active_link_local_discoveries", 1.0);
-    
+
     let interfaces = get_usable_interfaces();
-    
+
     if interfaces.is_empty() {
         gauge!("ipv6kit_active_link_local_discoveries", 0.0);
         return Err("No active network interfaces with IPv6 found.".to_string());
     }
 
     let mut all_hosts = std::collections::HashSet::new();
-    
+
     for interface in interfaces {
         println!("Scanning interface: {}", interface.name);
         match discover_ipv6_link_local(&interface) {
@@ -168,18 +186,24 @@ pub fn discover_all_ipv6_link_local() -> Result<Vec<Ipv6Addr>, String> {
                 }
             }
             Err(e) => {
-                println!("Warning: Failed to scan interface {}: {}", interface.name, e);
+                println!(
+                    "Warning: Failed to scan interface {}: {}",
+                    interface.name, e
+                );
                 counter!("ipv6kit_link_local_interface_errors_total", 1);
             }
         }
     }
-    
+
     let mut results: Vec<Ipv6Addr> = all_hosts.into_iter().collect();
     results.sort();
-    
+
     // Record discovery results
-    counter!("ipv6kit_link_local_hosts_discovered_total", results.len() as u64);
+    counter!(
+        "ipv6kit_link_local_hosts_discovered_total",
+        results.len() as u64
+    );
     gauge!("ipv6kit_active_link_local_discoveries", 0.0);
-    
+
     Ok(results)
-} 
+}

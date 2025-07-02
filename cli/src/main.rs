@@ -1,32 +1,32 @@
+use analyze::{AnalysisType, analyze};
 use clap::Parser;
+use comfy_table::{Attribute, Cell, ContentArrangement, Table, modifiers::UTF8_ROUND_CORNERS};
 use comfy_table::{CellAlignment, Row};
-use comfy_table::{Table, ContentArrangement, modifiers::UTF8_ROUND_CORNERS, Attribute, Cell};
-use std::path::PathBuf;
-use std::net::{IpAddr, ToSocketAddrs};
-use std::fs::File;
-use ipnet::IpNet;
 use hickory_resolver::AsyncResolver;
 use hickory_resolver::config::{ResolverConfig, ResolverOpts};
-use polars::prelude::*;
+use ipnet::IpNet;
 use polars::lazy::dsl::col;
-use analyze::{analyze, AnalysisType};
+use polars::prelude::*;
 use sink::print_dataframe;
-use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+use std::fs::File;
+use std::net::{IpAddr, ToSocketAddrs};
+use std::path::PathBuf;
 use tracing_indicatif::IndicatifLayer;
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
-use tracing::{info, error, info_span};
-use time;
+use indicatif::{ProgressState, ProgressStyle};
 use std::time::Duration;
-use indicatif::{ProgressStyle, ProgressState};
+use time;
+use tracing::{error, info, info_span};
 
 mod analyze;
-mod source;
-mod sink;
 mod frontends;
 mod runner;
+mod sink;
+mod source;
 
 use frontends::cli::{Cli, Commands};
-use frontends::grpc::{run_server, execute_remote_command};
+use frontends::grpc::{execute_remote_command, run_server};
 
 fn elapsed_subsec(state: &ProgressState, writer: &mut dyn std::fmt::Write) {
     let elapsed = state.elapsed();
@@ -73,10 +73,9 @@ fn main() {
         .with_target(false)
         .with_span_events(fmt::format::FmtSpan::NONE)
         .with_timer(fmt::time::LocalTime::new(
-            time::macros::format_description!("[hour]:[minute]:[second]")
+            time::macros::format_description!("[hour]:[minute]:[second]"),
         ));
-    let filter_layer = EnvFilter::try_from_default_env()
-        .unwrap_or_else(|_| EnvFilter::new("info"));
+    let filter_layer = EnvFilter::try_from_default_env().unwrap_or_else(|_| EnvFilter::new("info"));
 
     tracing_subscriber::registry()
         .with(filter_layer)
@@ -113,14 +112,12 @@ fn main() {
                 std::process::exit(1);
             }
         }
-        _ => {
-            match cli.command.run() {
-                Ok(df) => print_dataframe(&df),
-                Err(e) => {
-                    error!("Error: {}", e);
-                    std::process::exit(1);
-                }
+        _ => match cli.command.run() {
+            Ok(df) => print_dataframe(&df),
+            Err(e) => {
+                error!("Error: {}", e);
+                std::process::exit(1);
             }
-        }
+        },
     }
-} 
+}

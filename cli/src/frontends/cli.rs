@@ -30,4 +30,4 @@ pub struct Cli {
 
     #[command(subcommand)]
     pub command: Commands,
-} 
+}

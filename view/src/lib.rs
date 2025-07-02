@@ -1,23 +1,23 @@
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use polars::prelude::*;
 use ratatui::{
+    Frame, Terminal,
     backend::{Backend, CrosstermBackend},
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, Cell, Paragraph, Row, Table, TableState},
-    Frame, Terminal,
 };
 use std::io;
 
 // The App struct holds the state of the application.
 struct App {
-    state: TableState,      // State for the table widget (e.g., selected row and offset)
-    df: DataFrame,          // The DataFrame being displayed
-    scroll_x: usize,        // Horizontal scroll position
+    state: TableState, // State for the table widget (e.g., selected row and offset)
+    df: DataFrame,     // The DataFrame being displayed
+    scroll_x: usize,   // Horizontal scroll position
     viewport_height: usize, // The number of rows visible in the table area
 }
 
@@ -81,7 +81,10 @@ impl App {
 
     // Scroll columns to the right.
     pub fn next_col(&mut self) {
-        self.scroll_x = self.scroll_x.saturating_add(1).min(self.df.width().saturating_sub(1));
+        self.scroll_x = self
+            .scroll_x
+            .saturating_add(1)
+            .min(self.df.width().saturating_sub(1));
     }
 
     // Scroll columns to the left.
@@ -158,7 +161,9 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
     app.viewport_height = area.height as usize;
 
     let selected_style = Style::default().add_modifier(Modifier::REVERSED);
-    let header_style = Style::default().fg(Color::Blue).add_modifier(Modifier::BOLD);
+    let header_style = Style::default()
+        .fg(Color::Blue)
+        .add_modifier(Modifier::BOLD);
 
     let max_cols = (area.width / 20).max(1) as usize;
 
@@ -181,7 +186,8 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
     let rows: Vec<ratatui::widgets::Row> = (start_row..end_row)
         .map(|i| {
             let polars_row = app.df.get_row(i).unwrap();
-            let cells: Vec<Cell> = polars_row.0
+            let cells: Vec<Cell> = polars_row
+                .0
                 .iter()
                 .skip(app.scroll_x)
                 .take(max_cols)
@@ -191,14 +197,17 @@ fn draw_table(f: &mut Frame, app: &mut App, area: Rect) {
         })
         .collect();
 
-
     let widths = (0..max_cols)
         .map(|_| Constraint::Length(20))
         .collect::<Vec<_>>();
 
     let table = Table::new(rows, &widths)
         .header(header)
-        .block(Block::default().borders(Borders::ALL).title("Polars DataFrame Explorer"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .title("Polars DataFrame Explorer"),
+        )
         .highlight_style(selected_style)
         .highlight_symbol(">> ");
 

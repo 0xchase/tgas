@@ -1,7 +1,10 @@
-use std::net::IpAddr;
-use pnet::transport::{TransportSender, TransportReceiver, icmp_packet_iter, icmpv6_packet_iter, TransportChannelType, TransportProtocol};
 use pnet::packet::Packet;
 use pnet::packet::ip::IpNextHeaderProtocols;
+use pnet::transport::{
+    TransportChannelType, TransportProtocol, TransportReceiver, TransportSender, icmp_packet_iter,
+    icmpv6_packet_iter,
+};
+use std::net::IpAddr;
 use std::time::Duration;
 
 mod icmp;
@@ -9,7 +12,7 @@ mod tcp;
 mod udp;
 
 pub use icmp::IcmpProbe;
-pub use tcp::{TcpSynProbe, TcpAckProbe};
+pub use tcp::{TcpAckProbe, TcpSynProbe};
 
 #[derive(Debug, Clone)]
 pub enum ProbeResult {
@@ -41,14 +44,17 @@ pub trait Probe<T: Clone + Copy + Into<IpAddr>> {
     const NAME: &'static str;
     const DESCRIPTION: &'static str;
     const CHANNEL_TYPE: TransportChannelType;
-    type PacketIterator<'a>: Iterator<Item = (IpAddr, Vec<u8>)> + 'a where Self: 'a;
+    type PacketIterator<'a>: Iterator<Item = (IpAddr, Vec<u8>)> + 'a
+    where
+        Self: 'a;
 
     fn build(&self, source: T, target: T) -> Result<impl Packet, String>;
-    
+
     /// Send the built packet to the target using the provided transport sender
     fn send(&self, source: &T, target: &T, sender: &mut TransportSender) -> Result<(), String> {
         let packet = self.build(source.clone(), target.clone())?;
-        sender.send_to(packet, (*target).into())
+        sender
+            .send_to(packet, (*target).into())
             .map_err(|e| format!("Failed to send packet: {}", e))?;
         Ok(())
     }

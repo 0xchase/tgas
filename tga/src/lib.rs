@@ -1,22 +1,21 @@
 mod entropy_ip;
-mod random_ip;
 pub mod python_tga;
+mod random_ip;
 
-use std::net::Ipv6Addr;
-use std::collections::HashSet;
-use std::collections::HashMap;
-use std::any::{Any, TypeId};
 use inventory;
+use std::any::{Any, TypeId};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::net::Ipv6Addr;
 use std::sync::Once;
 
 pub use entropy_ip::EntropyIpTga;
-pub use random_ip::RandomIpTga;
-pub use python_tga::PythonTGA;
-pub use python_tga::get_available_python_tga_infos;
-pub use python_tga::PythonTgaInfo;
-use serde::{de::DeserializeOwned, Serialize};
 use plugin::contracts::PluginInfo;
-
+pub use python_tga::PythonTGA;
+pub use python_tga::PythonTgaInfo;
+pub use python_tga::get_available_python_tga_infos;
+pub use random_ip::RandomIpTga;
+use serde::{Serialize, de::DeserializeOwned};
 
 // generates new targets given a seed
 /*
@@ -84,8 +83,8 @@ pub struct TgaRegistration {
 inventory::collect!(TgaRegistration);
 
 // --- Dynamic Python TGA registration ---
-use std::sync::Mutex;
 use std::sync::Arc;
+use std::sync::Mutex;
 
 static DYNAMIC_PYTHON_TGAS_INIT: Once = Once::new();
 static DYNAMIC_PYTHON_TGAS: Mutex<Vec<TgaRegistration>> = Mutex::new(Vec::new());
@@ -93,7 +92,7 @@ static DYNAMIC_PYTHON_TGAS: Mutex<Vec<TgaRegistration>> = Mutex::new(Vec::new())
 fn get_dynamic_python_tgas() -> Vec<TgaRegistration> {
     DYNAMIC_PYTHON_TGAS_INIT.call_once(|| {
         println!("[DEBUG] Querying Python TGA registry...");
-        
+
         // Query Python TGAs at runtime
         let python_tga_infos = match python_tga::get_available_python_tga_infos() {
             Ok(list) => list,
@@ -120,7 +119,10 @@ fn get_dynamic_python_tgas() -> Vec<TgaRegistration> {
         *dynamic_tgas = regs;
     });
     let result = DYNAMIC_PYTHON_TGAS.lock().unwrap().clone();
-    println!("[DEBUG] Returning dynamic Python TGAs: {:?}", result.iter().map(|r| r.name).collect::<Vec<_>>());
+    println!(
+        "[DEBUG] Returning dynamic Python TGAs: {:?}",
+        result.iter().map(|r| r.name).collect::<Vec<_>>()
+    );
     result
 }
 
@@ -156,18 +158,22 @@ impl TgaRegistry {
             .collect();
         names
     }
-    
+
     pub fn get_tga_description(name: &str) -> Option<&'static str> {
         inventory::iter::<TgaRegistration>
             .into_iter()
             .find(|reg| reg.name == name)
             .map(|reg| reg.description)
     }
-    
-    pub fn train_tga(name: &str, addresses: Vec<[u8; 16]>) -> Result<Box<dyn TGA + Sync + Send + 'static>, String> {
+
+    pub fn train_tga(
+        name: &str,
+        addresses: Vec<[u8; 16]>,
+    ) -> Result<Box<dyn TGA + Sync + Send + 'static>, String> {
         if let Some(reg) = inventory::iter::<TgaRegistration>
             .into_iter()
-            .find(|reg| reg.name == name) {
+            .find(|reg| reg.name == name)
+        {
             Ok((reg.train_fn)(addresses))
         } else {
             // Try Python TGAs
@@ -180,7 +186,9 @@ impl TgaRegistry {
         }
     }
 
-    pub fn deserialize_tga(model_data: &[u8]) -> Result<Box<dyn TGA + Sync + Send + 'static>, String> {
+    pub fn deserialize_tga(
+        model_data: &[u8],
+    ) -> Result<Box<dyn TGA + Sync + Send + 'static>, String> {
         // Try to deserialize as a trait object using typetag
         bincode::deserialize::<Box<dyn TGA>>(model_data)
             .map(|b| b as Box<dyn TGA + Sync + Send + 'static>)
@@ -204,13 +212,25 @@ mod tests {
     fn test_inventory_registration() {
         let tgas = TgaRegistry::get_available_tgas();
         assert!(!tgas.is_empty(), "No TGAs registered in inventory");
-        assert!(tgas.contains(&"entropy_ip"), "entropy_ip not found in registry");
-        assert!(tgas.contains(&"random_ip"), "random_ip not found in registry");
-        
+        assert!(
+            tgas.contains(&"entropy_ip"),
+            "entropy_ip not found in registry"
+        );
+        assert!(
+            tgas.contains(&"random_ip"),
+            "random_ip not found in registry"
+        );
+
         let help_text = TgaRegistry::get_tga_help_text();
-        assert!(help_text.contains("entropy_ip"), "Help text missing entropy_ip");
-        assert!(help_text.contains("random_ip"), "Help text missing random_ip");
-        
+        assert!(
+            help_text.contains("entropy_ip"),
+            "Help text missing entropy_ip"
+        );
+        assert!(
+            help_text.contains("random_ip"),
+            "Help text missing random_ip"
+        );
+
         println!("Registered TGAs: {:?}", tgas);
         println!("Help text:\n{}", help_text);
     }
@@ -228,8 +248,14 @@ pub fn generate(count: usize, unique: bool) {
         Ipv6Addr::new(0x2001, 0x0db8, 0x0002, 0x000a, 0, 0, 0, 0x000b).octets(),
         Ipv6Addr::new(0x2001, 0x0db8, 0x0002, 0x000b, 0, 0, 0, 0x000a).octets(),
         // Add an address that's quite different to influence entropy
-        Ipv6Addr::new(0x2001, 0x0db8, 0x1111, 0x2222, 0x3333, 0x4444, 0x5555, 0x6666).octets(),
-        Ipv6Addr::new(0x2001, 0x0db8, 0x1111, 0x2222, 0x3333, 0x4444, 0x5555, 0x6667).octets(),
+        Ipv6Addr::new(
+            0x2001, 0x0db8, 0x1111, 0x2222, 0x3333, 0x4444, 0x5555, 0x6666,
+        )
+        .octets(),
+        Ipv6Addr::new(
+            0x2001, 0x0db8, 0x1111, 0x2222, 0x3333, 0x4444, 0x5555, 0x6667,
+        )
+        .octets(),
     ];
 
     println!("Building model from {} seed addresses...", seed_ips.len());
@@ -253,8 +279,10 @@ pub fn generate(count: usize, unique: bool) {
         } else {
             attempts += 1;
             if attempts >= MAX_ATTEMPTS {
-                eprintln!("Warning: Could only generate {}/{} unique addresses after {} attempts", 
-                    i, count, MAX_ATTEMPTS);
+                eprintln!(
+                    "Warning: Could only generate {}/{} unique addresses after {} attempts",
+                    i, count, MAX_ATTEMPTS
+                );
                 break;
             }
         }

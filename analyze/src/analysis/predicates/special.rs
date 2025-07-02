@@ -7,9 +7,9 @@
 // - special_purpose.rs: DiscardOnlyPredicate, DummyPrefixPredicate, As112V6Predicate, DirectAs112Predicate, DeprecatedOrchidPredicate, OrchidV2Predicate, DroneRemoteIdPredicate
 
 // Re-export all predicates for backward compatibility
-pub use crate::analysis::predicates::multicast::*;
-pub use crate::analysis::predicates::reserved::*;
-pub use crate::analysis::predicates::transition::*;
 pub use crate::analysis::predicates::documentation::*;
+pub use crate::analysis::predicates::multicast::*;
 pub use crate::analysis::predicates::protocols::*;
+pub use crate::analysis::predicates::reserved::*;
 pub use crate::analysis::predicates::special_purpose::*;
+pub use crate::analysis::predicates::transition::*;

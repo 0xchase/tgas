@@ -1,8 +1,8 @@
-use std::net::Ipv6Addr;
-use plugin::contracts::{Predicate, PluginInfo};
 use crate::analysis::predicates::reserved::{
-    LoopbackPredicate, UnspecifiedPredicate, LinkLocalPredicate, UniqueLocalPredicate
+    LinkLocalPredicate, LoopbackPredicate, UniqueLocalPredicate, UnspecifiedPredicate,
 };
+use plugin::contracts::{PluginInfo, Predicate};
+use std::net::Ipv6Addr;
 
 pub struct Eui64Analysis;
 pub struct IsPrivacyExtensionPredicate;
@@ -18,7 +18,8 @@ impl Eui64Analysis {
 
 impl PluginInfo for Eui64Analysis {
     const NAME: &'static str = "eui64_analysis";
-    const DESCRIPTION: &'static str = "Analyzes IPv6 addresses for EUI-64 format and provides statistics";
+    const DESCRIPTION: &'static str =
+        "Analyzes IPv6 addresses for EUI-64 format and provides statistics";
 }
 
 impl Predicate for Eui64Analysis {
@@ -43,12 +44,12 @@ impl Predicate for IsPrivacyExtensionPredicate {
         let unspecified_pred = UnspecifiedPredicate;
         let link_local_pred = LinkLocalPredicate;
         let unique_local_pred = UniqueLocalPredicate;
-        
-        let is_global = !loopback_pred.predicate(addr) && 
-                       !unspecified_pred.predicate(addr) && 
-                       !link_local_pred.predicate(addr) && 
-                       !unique_local_pred.predicate(addr);
-        
+
+        let is_global = !loopback_pred.predicate(addr)
+            && !unspecified_pred.predicate(addr)
+            && !link_local_pred.predicate(addr)
+            && !unique_local_pred.predicate(addr);
+
         let is_eui64 = addr.octets()[8] == 0xff && addr.octets()[9] == 0xfe;
 
         is_global && !is_eui64

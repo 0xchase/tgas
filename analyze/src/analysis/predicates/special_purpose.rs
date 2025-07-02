@@ -1,6 +1,6 @@
-use std::net::Ipv6Addr;
-use plugin::contracts::{Predicate, PluginInfo};
 use ipnet::Ipv6Net;
+use plugin::contracts::{PluginInfo, Predicate};
+use std::net::Ipv6Addr;
 
 pub struct DiscardOnlyPredicate;
 pub struct DummyPrefixPredicate;
@@ -113,4 +113,4 @@ impl Predicate for DroneRemoteIdPredicate {
         let network: Ipv6Net = "2001:30::/28".parse().unwrap();
         network.contains(&addr)
     }
-} 
+}
