@@ -4,6 +4,11 @@ use std::net::{IpAddr, Ipv4Addr};
 use std::time::{Duration, Instant};
 use tokio::time::sleep;
 
+use probe::Probe;
+use pnet::transport::{
+    icmp_packet_iter, icmpv6_packet_iter, transport_channel, TransportChannelType, TransportProtocol, TransportReceiver, TransportSender
+};
+
 use ipnet::{IpNet, Ipv4Net, Ipv6Net};
 
 pub mod icmp6;
@@ -40,6 +45,46 @@ pub async fn test_scan() {
 
     println!("Scan complete");
 }
+
+pub struct Scanner2<A: Into<IpAddr>, T: Probe<A>> {
+    max_active_probes: usize,
+    new_probe_delay: Option<Duration>,
+}
+
+impl<A: Into<IpAddr>, T: Probe<A>> Scanner2<A, T> {
+    fn scan<I>(&self, settings: T, addrs: I)
+    where
+        I: Iterator<Item = A>,
+    {
+        let (mut tx, mut rx) = transport_channel(100, T::CHANNEL_TYPE).unwrap();
+        for addr in addrs {
+            let packet = T::build(&settings, addr, addr).unwrap();
+            tx.send_to(packet, addr.into());
+        }
+    }
+}
+
+/*impl<T: Probe<Ipv6Addr>> Scanner2<T> {
+    fn scan<I>(&self, addrs: I) -> impl Stream<Item = ProbeResult>
+    where
+        I: Iterator<Item = Ipv6Addr>,
+    {
+        let initial_state = addrs.peekable();
+    }
+}
+
+impl<T: Probe<IpAddr>> Scanner2<T> {
+    fn scan<I>(&self, addrs: I) -> impl Stream<Item = ProbeResult>
+    where
+        I: Iterator<Item = IpAddr>,
+    {
+        let probe = T::default();
+        for addr in addrs {
+            
+        }
+        let initial_state = addrs.peekable();
+    }
+}*/
 
 pub struct Scanner {
     max_active_probes: usize,

@@ -40,7 +40,7 @@ pub enum ProbeResult {
     },
 }
 
-pub trait Probe<T: Clone + Copy + Into<IpAddr>> {
+pub trait Probe<T: Clone + Copy + Into<IpAddr>>: Default {
     const NAME: &'static str;
     const DESCRIPTION: &'static str;
     const CHANNEL_TYPE: TransportChannelType;
