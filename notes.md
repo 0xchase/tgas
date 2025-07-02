@@ -1,10 +1,14 @@
 # Notes
 
 - [ ] Implement train command
+  - Can train on addresses (to include or exclude), or ScanResult CSV
+  - Output the trained (or updated) model
 - [ ] Implement generate command
+  - Can apply different TGA masks
 - [ ] Implement scan commmand
-  - Implement dealiasing strategies
+  - Can include/exclude failed probes from results
 - [ ] Implement discover command
+  - Implement dealiasing strategies
 - [ ] Implement resources
   - Manage lists of prefixes for countries, ASNs, hitlist, ntp pool, etc (https://github.com/hbn1987/6Scan)
   - Can add/remove resources by name and reference them in commands

@@ -13,8 +13,6 @@ use analyze::analysis::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnalysisType {
-    /// Basic address counts and statistics (total, unique, duplicates)
-    Unique,
     /// Address space dispersion metrics (distances between addresses)
     Dispersion,
     /// Information entropy analysis
@@ -26,10 +24,6 @@ pub enum AnalysisType {
     },
     /// Count addresses matching each predicate
     Counts,
-    /// Special IPv6 address block analysis
-    Special,
-    /// EUI-64 address analysis (extract MAC addresses)
-    Eui64,
 }
 
 struct ProgressTracker {
@@ -93,20 +87,6 @@ impl ProgressTracker {
 
 pub fn analyze(df: DataFrame, analysis_type: AnalysisType) -> Result<DataFrame, IoError> {
     match analysis_type {
-        AnalysisType::Unique => {
-            // For Unique analysis, return the first series result
-            if let Some(series) = df.get_columns().first() {
-                let analyzer = UniqueAnalysis::new(None);
-                analyzer
-                    .analyze(series.as_series().unwrap())
-                    .map_err(|e| IoError::new(std::io::ErrorKind::InvalidData, e.to_string()))
-            } else {
-                Err(IoError::new(
-                    std::io::ErrorKind::InvalidData,
-                    "No data to analyze",
-                ))
-            }
-        }
         AnalysisType::Dispersion => {
             // For Dispersion analysis, return the first series result
             if let Some(series) = df.get_columns().first() {
@@ -166,14 +146,6 @@ pub fn analyze(df: DataFrame, analysis_type: AnalysisType) -> Result<DataFrame, 
                 ))
             }
         }
-        AnalysisType::Special => Err(IoError::new(
-            std::io::ErrorKind::Unsupported,
-            "Special analysis not yet implemented",
-        )),
-        AnalysisType::Eui64 => Err(IoError::new(
-            std::io::ErrorKind::Unsupported,
-            "EUI-64 analysis not yet implemented",
-        )),
     }
 }
 
@@ -201,5 +173,3 @@ fn analyze_column<A: AbsorbField<Ipv6Addr>>(
     tracker.finish(true);
     Ok(())
 }
-
-
