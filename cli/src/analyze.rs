@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::time::{Duration, Instant};
 
 use analyze::analysis::{
-    DispersionAnalysis, ShannonEntropyAnalysis, StatisticsAnalysis, SubnetAnalysis, UniqueAnalysis,
+    CountAnalysis, DispersionAnalysis, ShannonEntropyAnalysis, StatisticsAnalysis, SubnetAnalysis, UniqueAnalysis,
 };
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -153,10 +153,12 @@ pub fn analyze(df: DataFrame, analysis_type: AnalysisType) -> Result<DataFrame, 
             }
         }
         AnalysisType::Counts => {
-            // For Counts analysis, count addresses matching each predicate
+            // For Counts analysis, return the first series result
             if let Some(series) = df.get_columns().first() {
-                let counts = count_predicates(series)?;
-                Ok(counts)
+                let mut analyzer = CountAnalysis::new(None);
+                analyze_column(series, &mut analyzer, df.height())?;
+                let output = analyzer.finalize();
+                Ok(output)
             } else {
                 Err(IoError::new(
                     std::io::ErrorKind::InvalidData,
@@ -200,55 +202,4 @@ fn analyze_column<A: AbsorbField<Ipv6Addr>>(
     Ok(())
 }
 
-fn count_predicates(series: &Column) -> Result<DataFrame, IoError> {
-    use analyze::analysis::predicates::get_all_predicates;
-    
-    let all_predicates = get_all_predicates();
-    let mut predicate_counts = std::collections::HashMap::new();
-    
-    // Initialize all predicates with zero count
-    for (name, _) in &all_predicates {
-        predicate_counts.insert(*name, 0);
-    }
-    
-    // Count addresses matching each predicate
-    for item in series.str().map_err(|e| {
-        IoError::new(
-            std::io::ErrorKind::InvalidData,
-            format!("Failed to convert series to string: {}", e),
-        )
-    })? {
-        if let Some(addr_str) = item {
-            if let Ok(addr) = addr_str.parse::<Ipv6Addr>() {
-                for (name, predicate_fn) in &all_predicates {
-                    if predicate_fn(addr) {
-                        let count = predicate_counts.get_mut(name).unwrap();
-                        *count += 1;
-                    }
-                }
-            }
-        }
-    }
-    
-    // Convert to sorted vectors, excluding zero counts
-    let mut predicate_names = Vec::new();
-    let mut counts = Vec::new();
-    
-    for (name, count) in predicate_counts {
-        if count > 0 {
-            predicate_names.push(name.to_string());
-            counts.push(count as u64);
-        }
-    }
-    
-    // Sort by count (highest to lowest)
-    let mut pairs: Vec<_> = predicate_names.into_iter().zip(counts.into_iter()).collect();
-    pairs.sort_by(|a, b| b.1.cmp(&a.1));
-    
-    let (predicate_names, counts): (Vec<_>, Vec<_>) = pairs.into_iter().unzip();
-    
-    DataFrame::new(vec![
-        Column::new("predicate".into(), &predicate_names),
-        Column::new("count".into(), &counts),
-    ]).map_err(|e| IoError::new(std::io::ErrorKind::InvalidData, e.to_string()))
-}
+
