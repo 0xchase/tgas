@@ -10,7 +10,7 @@ use pnet::transport::{
 };
 use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::time::Instant;
-
+/*
 /// TCP SYN probe implementation
 #[derive(Debug, Clone)]
 pub struct TcpSynProbe {
@@ -141,7 +141,6 @@ impl Probe<Ipv4Addr> for TcpSynProbe {
     const DESCRIPTION: &'static str = "TCP SYN probe for IPv4 hosts";
     const CHANNEL_TYPE: TransportChannelType =
         TransportChannelType::Layer4(TransportProtocol::Ipv4(IpNextHeaderProtocols::Tcp));
-    type PacketIterator<'a> = TcpPacketIter<'a>;
 
     fn build(&self, _source: Ipv4Addr, _target: Ipv4Addr) -> Result<impl Packet, String> {
         let buffer_size = MutableTcpPacket::minimum_packet_size();
@@ -178,12 +177,6 @@ impl Probe<Ipv4Addr> for TcpSynProbe {
         tcp_packet.set_checksum(0);
 
         tcp::TcpPacket::owned(buffer).ok_or("Failed to create owned TcpPacket".to_string())
-    }
-
-    fn packet_iterator<'a>(&self, receiver: &'a mut TransportReceiver) -> Self::PacketIterator<'a> {
-        TcpPacketIter {
-            inner: tcp_packet_iter(receiver),
-        }
     }
 }
 
@@ -192,7 +185,6 @@ impl Probe<Ipv6Addr> for TcpSynProbe {
     const DESCRIPTION: &'static str = "TCP SYN probe for IPv6 hosts";
     const CHANNEL_TYPE: TransportChannelType =
         TransportChannelType::Layer4(TransportProtocol::Ipv6(IpNextHeaderProtocols::Tcp));
-    type PacketIterator<'a> = TcpPacketIter<'a>;
 
     fn build(&self, _source: Ipv6Addr, _target: Ipv6Addr) -> Result<impl Packet, String> {
         let buffer_size = MutableTcpPacket::minimum_packet_size();
@@ -230,12 +222,6 @@ impl Probe<Ipv6Addr> for TcpSynProbe {
 
         tcp::TcpPacket::owned(buffer).ok_or("Failed to create owned TcpPacket".to_string())
     }
-
-    fn packet_iterator<'a>(&self, receiver: &'a mut TransportReceiver) -> Self::PacketIterator<'a> {
-        TcpPacketIter {
-            inner: tcp_packet_iter(receiver),
-        }
-    }
 }
 
 impl Probe<Ipv4Addr> for TcpAckProbe {
@@ -243,7 +229,6 @@ impl Probe<Ipv4Addr> for TcpAckProbe {
     const DESCRIPTION: &'static str = "TCP ACK probe for IPv4 hosts";
     const CHANNEL_TYPE: TransportChannelType =
         TransportChannelType::Layer4(TransportProtocol::Ipv4(IpNextHeaderProtocols::Tcp));
-    type PacketIterator<'a> = TcpPacketIter<'a>;
 
     fn build(&self, _source: Ipv4Addr, _target: Ipv4Addr) -> Result<impl Packet, String> {
         let buffer_size = MutableTcpPacket::minimum_packet_size();
@@ -282,12 +267,6 @@ impl Probe<Ipv4Addr> for TcpAckProbe {
 
         tcp::TcpPacket::owned(buffer).ok_or("Failed to create owned TcpPacket".to_string())
     }
-
-    fn packet_iterator<'a>(&self, receiver: &'a mut TransportReceiver) -> Self::PacketIterator<'a> {
-        TcpPacketIter {
-            inner: tcp_packet_iter(receiver),
-        }
-    }
 }
 
 impl Probe<Ipv6Addr> for TcpAckProbe {
@@ -295,7 +274,6 @@ impl Probe<Ipv6Addr> for TcpAckProbe {
     const DESCRIPTION: &'static str = "TCP ACK probe for IPv6 hosts";
     const CHANNEL_TYPE: TransportChannelType =
         TransportChannelType::Layer4(TransportProtocol::Ipv6(IpNextHeaderProtocols::Tcp));
-    type PacketIterator<'a> = TcpPacketIter<'a>;
 
     fn build(&self, _source: Ipv6Addr, _target: Ipv6Addr) -> Result<impl Packet, String> {
         let buffer_size = MutableTcpPacket::minimum_packet_size();
@@ -334,10 +312,5 @@ impl Probe<Ipv6Addr> for TcpAckProbe {
 
         tcp::TcpPacket::owned(buffer).ok_or("Failed to create owned TcpPacket".to_string())
     }
-
-    fn packet_iterator<'a>(&self, receiver: &'a mut TransportReceiver) -> Self::PacketIterator<'a> {
-        TcpPacketIter {
-            inner: tcp_packet_iter(receiver),
-        }
-    }
 }
+*/

@@ -5,10 +5,7 @@ use pnet::packet::icmpv6::{
     echo_request::MutableEchoRequestPacket as MutableIcmpv6EchoRequestPacket,
 };
 use pnet::packet::ip::IpNextHeaderProtocols;
-use pnet::transport::{
-    self, TransportChannelType, TransportProtocol, TransportReceiver, TransportSender,
-    icmp_packet_iter, icmpv6_packet_iter,
-};
+use pnet::transport::{TransportChannelType, TransportProtocol};
 use std::net::IpAddr;
 use std::time::Duration;
 
@@ -62,65 +59,36 @@ impl IcmpProbe {
     }
 }
 
-pub struct IcmpPacketIter<'a> {
-    inner: pnet::transport::IcmpTransportChannelIterator<'a>,
-}
-
-impl<'a> Iterator for IcmpPacketIter<'a> {
-    type Item = (IpAddr, Vec<u8>);
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.inner.next_with_timeout(Duration::from_secs(2)) {
-            Ok(Some((packet, addr))) => Some((addr, packet.packet().to_vec())),
-            _ => None,
-        }
-    }
-}
-
-pub struct Icmpv6PacketIter<'a> {
-    inner: pnet::transport::Icmpv6TransportChannelIterator<'a>,
-}
-
-impl<'a> Iterator for Icmpv6PacketIter<'a> {
-    type Item = (IpAddr, Vec<u8>);
-    fn next(&mut self) -> Option<Self::Item> {
-        match self.inner.next_with_timeout(Duration::from_secs(2)) {
-            Ok(Some((packet, addr))) => Some((addr, packet.packet().to_vec())),
-            _ => None,
-        }
-    }
-}
-
 impl Probe<Ipv4Addr> for IcmpProbe {
     const NAME: &'static str = "ICMPv4";
     const DESCRIPTION: &'static str = "ICMPv4 Echo Request probe for IPv4 hosts";
+    
     const CHANNEL_TYPE: TransportChannelType =
         TransportChannelType::Layer4(TransportProtocol::Ipv4(IpNextHeaderProtocols::Icmp));
-    type PacketIterator<'a> = IcmpPacketIter<'a>;
 
-    fn build(&self, _source: Ipv4Addr, _target: Ipv4Addr) -> Result<impl Packet, String> {
-        let buffer_size = MutableEchoRequestPacket::minimum_packet_size() + self.payload_size;
-        let mut buffer = vec![0u8; buffer_size];
-        let mut icmp_packet = MutableEchoRequestPacket::new(&mut buffer)
-            .ok_or("Failed to create mutable ICMP Echo Request packet")?;
-        icmp_packet.set_icmp_type(IcmpTypes::EchoRequest);
-        icmp_packet.set_identifier(self.identifier);
-        icmp_packet.set_sequence_number(0);
-        let mut payload = vec![0u8; self.payload_size];
-        let now = Instant::now().elapsed().as_millis() as u32;
-        if self.payload_size >= 4 {
-            payload[..4].copy_from_slice(&now.to_be_bytes());
-        }
-        icmp_packet.set_payload(&payload);
-        let checksum = icmp::checksum(&icmp::IcmpPacket::new(icmp_packet.packet()).unwrap());
-        icmp_packet.set_checksum(checksum);
-        icmp::echo_request::EchoRequestPacket::owned(buffer)
-            .ok_or("Failed to create owned EchoRequestPacket".to_string())
+    type Packet<'p> = MutableEchoRequestPacket<'p>;
+
+    fn init<'p>(buffer: &'p mut [u8]) -> Self::Packet<'p> {
+        Self::Packet::new(buffer).unwrap()
     }
 
-    fn packet_iterator<'a>(&self, receiver: &'a mut TransportReceiver) -> Self::PacketIterator<'a> {
-        IcmpPacketIter {
-            inner: icmp_packet_iter(receiver),
-        }
+    fn update<'p>(&'p self, mut packet: Self::Packet<'p>, _source: Ipv4Addr, _target: Ipv4Addr) -> Result<(), String> {
+        // Set identifiers
+        packet.set_icmp_type(IcmpTypes::EchoRequest);
+        packet.set_identifier(self.identifier);
+        packet.set_sequence_number(0);
+
+        // Set payload
+        let payload: [u8; 5] = [0; 5];
+        packet.set_payload(&payload);
+
+        // Set checksum
+        let data = packet.packet();
+        let icmp = icmp::IcmpPacket::new(data).unwrap();
+        let checksum = icmp::checksum(&icmp);
+        packet.set_checksum(checksum);
+
+        Ok(())
     }
 }
 
@@ -129,34 +97,29 @@ impl Probe<Ipv6Addr> for IcmpProbe {
     const DESCRIPTION: &'static str = "ICMPv6 Echo Request probe for IPv6 hosts";
     const CHANNEL_TYPE: TransportChannelType =
         TransportChannelType::Layer4(TransportProtocol::Ipv6(IpNextHeaderProtocols::Icmpv6));
-    type PacketIterator<'a> = Icmpv6PacketIter<'a>;
 
-    fn build(&self, source: Ipv6Addr, target: Ipv6Addr) -> Result<impl Packet, String> {
-        let buffer_size = MutableIcmpv6EchoRequestPacket::minimum_packet_size() + self.payload_size;
-        let mut buffer = vec![0u8; buffer_size];
-        let mut icmpv6_packet = MutableIcmpv6EchoRequestPacket::new(&mut buffer)
-            .ok_or("Failed to create mutable ICMPv6 Echo Request packet")?;
-        icmpv6_packet.set_identifier(self.identifier);
-        icmpv6_packet.set_sequence_number(0);
-        let mut payload = vec![0u8; self.payload_size];
-        let now = Instant::now().elapsed().as_millis() as u32;
-        if self.payload_size >= 4 {
-            payload[..4].copy_from_slice(&now.to_be_bytes());
-        }
-        icmpv6_packet.set_payload(&payload);
-        let checksum = icmpv6::checksum(
-            &icmpv6::Icmpv6Packet::new(icmpv6_packet.packet()).unwrap(),
-            &source,
-            &target,
-        );
-        icmpv6_packet.set_checksum(checksum);
-        icmpv6::echo_request::EchoRequestPacket::owned(buffer)
-            .ok_or("Failed to create owned Icmpv6EchoRequestPacket".to_string())
+    type Packet<'p> = MutableIcmpv6EchoRequestPacket<'p>;
+
+    fn init<'p>(buffer: &'p mut [u8]) -> Self::Packet<'p> {
+        Self::Packet::new(buffer).unwrap()
     }
 
-    fn packet_iterator<'a>(&self, receiver: &'a mut TransportReceiver) -> Self::PacketIterator<'a> {
-        Icmpv6PacketIter {
-            inner: icmpv6_packet_iter(receiver),
-        }
+    fn update<'p>(&'p self, mut packet: Self::Packet<'p>, source: Ipv6Addr, target: Ipv6Addr) -> Result<(), String> {
+        // Set identifiers
+        packet.set_identifier(self.identifier);
+        packet.set_sequence_number(0);
+
+        // Set payload
+        let payload: [u8; 5] = [0; 5];
+        packet.set_payload(&payload);
+
+
+        // Set checksum
+        let data = packet.packet();
+        let icmp = icmpv6::Icmpv6Packet::new(data).unwrap();
+        let checksum = icmpv6::checksum(&icmp, &source, &target);
+        packet.set_checksum(checksum);
+
+        Ok(())
     }
 }

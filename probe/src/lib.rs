@@ -12,7 +12,7 @@ mod tcp;
 mod udp;
 
 pub use icmp::IcmpProbe;
-pub use tcp::{TcpAckProbe, TcpSynProbe};
+// pub use tcp::{TcpAckProbe, TcpSynProbe};
 
 #[derive(Debug, Clone)]
 pub enum ProbeResult {
@@ -44,14 +44,21 @@ pub trait Probe<T: Clone + Copy + Into<IpAddr>>: Default {
     const NAME: &'static str;
     const DESCRIPTION: &'static str;
     const CHANNEL_TYPE: TransportChannelType;
-    type PacketIterator<'a>: Iterator<Item = (IpAddr, Vec<u8>)> + 'a
+
+    type Packet<'p>: Packet where Self: 'p;
+
+    /*type PacketIterator<'a>: Iterator<Item = (IpAddr, Vec<u8>)> + 'a
     where
-        Self: 'a;
+        Self: 'a;*/
 
-    fn build(&self, source: T, target: T) -> Result<impl Packet, String>;
+    fn build2<'a>(&self, buffer: &'a mut [u8], source: T, target: T) {
+    }
 
-    /// Send the built packet to the target using the provided transport sender
-    fn send(&self, source: &T, target: &T, sender: &mut TransportSender) -> Result<(), String> {
+    fn init<'p>(buffer: &'p mut [u8]) -> Self::Packet<'p>;
+
+    fn update<'p>(&'p self, packet: Self::Packet<'p>, source: T, target: T) -> Result<(), String>;
+
+    /*fn send(&self, source: &T, target: &T, sender: &mut TransportSender) -> Result<(), String> {
         let packet = self.build(source.clone(), target.clone())?;
         sender
             .send_to(packet, (*target).into())
@@ -69,5 +76,5 @@ pub trait Probe<T: Clone + Copy + Into<IpAddr>>: Default {
             Some((addr, packet_data)) => Ok(Some((addr, packet_data))),
             None => Ok(None),
         }
-    }
+    }*/
 }
