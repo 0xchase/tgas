@@ -154,6 +154,9 @@ impl Ipv6KitService for Ipv6KitServiceImpl {
                     cli::Commands::View { file, .. } => {
                         info!("View command completed: file {:?}", file);
                     }
+                    cli::Commands::Analyze { file, analysis, .. } => {
+                        info!("Analyze command completed: file {:?}, analysis: {:?}", file, analysis);
+                    }
                     cli::Commands::Train => {
                         info!("Train command completed");
                     }

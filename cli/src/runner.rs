@@ -4,9 +4,9 @@ use std::net::IpAddr;
 use ipnet::IpNet;
 use serde::{Serialize, Deserialize};
 use polars::prelude::*;
-use analyze::analysis::{FilterAnalysis, CountAnalysis};
+use analyze::analysis::predicates::get_all_predicates;
 use tga::TGA;
-use tracing::{info, warn, span, Level};
+use tracing::info;
 use indicatif::{ProgressBar, ProgressStyle};
 
 
@@ -148,10 +148,105 @@ pub enum Eui64Predicate {
     LowByteHost,
 }
 
-#[derive(Subcommand, Serialize, Deserialize)]
-pub enum ViewAnalysisCommand {
-    /// Basic address counts and statistics
-    Unique,
+#[derive(Clone, ValueEnum, Serialize, Deserialize)]
+#[value(rename_all = "snake_case")]
+pub enum AddressPredicate {
+    // Reserved predicates
+    Loopback,
+    Unspecified,
+    LinkLocal,
+    UniqueLocal,
+    
+    // Multicast predicates
+    Multicast,
+    SolicitedNode,
+    
+    // Transition predicates
+    Ipv4Mapped,
+    Ipv4ToIpv6,
+    ExtendedIpv4,
+    Ipv6ToIpv4,
+    
+    // Documentation predicates
+    Documentation,
+    Documentation2,
+    Benchmarking,
+    
+    // Protocol predicates
+    Teredo,
+    IetfProtocol,
+    PortControl,
+    Turn,
+    DnsSd,
+    Amt,
+    SegmentRouting,
+    
+    // Special purpose predicates
+    DiscardOnly,
+    DummyPrefix,
+    As112V6,
+    DirectAs112,
+    DeprecatedOrchid,
+    OrchidV2,
+    DroneRemoteId,
+    
+    // EUI-64 predicates
+    Eui64,
+    LowByteHost,
+}
+
+impl AddressPredicate {
+    /// Convert the predicate to its corresponding filter name string
+    pub fn to_filter_name(&self) -> String {
+        match self {
+            // Reserved predicates
+            AddressPredicate::Loopback => "loopback",
+            AddressPredicate::Unspecified => "unspecified",
+            AddressPredicate::LinkLocal => "link_local",
+            AddressPredicate::UniqueLocal => "unique_local",
+            
+            // Multicast predicates
+            AddressPredicate::Multicast => "multicast",
+            AddressPredicate::SolicitedNode => "solicited_node",
+            
+            // Transition predicates
+            AddressPredicate::Ipv4Mapped => "ipv4_mapped",
+            AddressPredicate::Ipv4ToIpv6 => "ipv4_to_ipv6",
+            AddressPredicate::ExtendedIpv4 => "extended_ipv4",
+            AddressPredicate::Ipv6ToIpv4 => "ipv6_to_ipv4",
+            
+            // Documentation predicates
+            AddressPredicate::Documentation => "documentation",
+            AddressPredicate::Documentation2 => "documentation2",
+            AddressPredicate::Benchmarking => "benchmarking",
+            
+            // Protocol predicates
+            AddressPredicate::Teredo => "teredo",
+            AddressPredicate::IetfProtocol => "ietf_protocol",
+            AddressPredicate::PortControl => "port_control",
+            AddressPredicate::Turn => "turn",
+            AddressPredicate::DnsSd => "dns_sd",
+            AddressPredicate::Amt => "amt",
+            AddressPredicate::SegmentRouting => "segment_routing",
+            
+            // Special purpose predicates
+            AddressPredicate::DiscardOnly => "discard_only",
+            AddressPredicate::DummyPrefix => "dummy_prefix",
+            AddressPredicate::As112V6 => "as112v6",
+            AddressPredicate::DirectAs112 => "direct_as112",
+            AddressPredicate::DeprecatedOrchid => "deprecated_orchid",
+            AddressPredicate::OrchidV2 => "orchid_v2",
+            AddressPredicate::DroneRemoteId => "drone_remote_id",
+            
+            // EUI-64 predicates
+            AddressPredicate::Eui64 => "eui64",
+            AddressPredicate::LowByteHost => "low_byte_host",
+        }.to_string()
+    }
+}
+
+#[derive(Subcommand, Serialize, Deserialize, Debug)]
+pub enum AnalyzeCommand {
     /// Address space dispersion metrics
     Dispersion,
     /// Information entropy analysis
@@ -250,6 +345,32 @@ pub enum Commands {
     },
     /// Train the TGA
     Train,
+    /// Analyze data with various metrics
+    Analyze {
+        /// Path to file containing data to analyze
+        #[arg(value_name = "FILE")]
+        file: PathBuf,
+
+        /// Column name to select from input data
+        #[arg(short = 'f', long, value_name = "FIELD")]
+        field: Option<String>,
+
+        /// Include addresses matching these predicates (can be specified multiple times)
+        #[arg(long, value_enum)]
+        include: Vec<AddressPredicate>,
+
+        /// Exclude addresses matching these predicates (can be specified multiple times)
+        #[arg(long, value_enum)]
+        exclude: Vec<AddressPredicate>,
+
+        /// Filter for unique outputs only
+        #[arg(short = 'u', long)]
+        unique: bool,
+
+        /// Analysis subcommand to run
+        #[command(subcommand)]
+        analysis: AnalyzeCommand,
+    },
     /// Start gRPC server for remote command execution
     Serve {
         /// Server address to bind to (default: 127.0.0.1:50051)
@@ -260,7 +381,7 @@ pub enum Commands {
         #[arg(short = 'm', long, default_value = "9090")]
         metrics_port: u16,
     },
-    /// View and analyze data in an interactive TUI
+    /// View data in an interactive TUI
     View {
         /// Path to file containing data to view
         #[arg(value_name = "FILE")]
@@ -270,41 +391,17 @@ pub enum Commands {
         #[arg(short = 'f', long, value_name = "FIELD")]
         field: Option<String>,
 
-        /// Filter by reserved address types
+        /// Include addresses matching these predicates (can be specified multiple times)
         #[arg(long, value_enum)]
-        reserved: Option<ReservedPredicate>,
+        include: Vec<AddressPredicate>,
 
-        /// Filter by multicast address types
+        /// Exclude addresses matching these predicates (can be specified multiple times)
         #[arg(long, value_enum)]
-        multicast: Option<MulticastPredicate>,
+        exclude: Vec<AddressPredicate>,
 
-        /// Filter by transition address types
-        #[arg(long, value_enum)]
-        transition: Option<TransitionPredicate>,
-
-        /// Filter by documentation address types
-        #[arg(long, value_enum)]
-        documentation: Option<DocumentationPredicate>,
-
-        /// Filter by protocol address types
-        #[arg(long, value_enum)]
-        protocol: Option<ProtocolPredicate>,
-
-        /// Filter by special purpose address types
-        #[arg(long, value_enum)]
-        special_purpose: Option<SpecialPurposePredicate>,
-
-        /// Filter by EUI-64 address types
-        #[arg(long, value_enum)]
-        eui64: Option<Eui64Predicate>,
-
-        /// Output counts rather than full IP list
-        #[arg(short = 'c', long)]
-        count: bool,
-
-        /// Analysis subcommand to run
-        #[command(subcommand)]
-        analysis: Option<ViewAnalysisCommand>,
+        /// Filter for unique outputs only
+        #[arg(short = 'u', long)]
+        unique: bool,
 
         /// Show the resulting dataframe in an interactive TUI
         #[arg(long)]
@@ -319,8 +416,11 @@ impl Commands {
             Commands::Scan { scan_type, target, .. } => self.run_scan(scan_type, target),
             Commands::Discover => self.run_discover(),
             Commands::Train => self.run_train(),
-            Commands::View { file, field, reserved, multicast, transition, documentation, protocol, special_purpose, eui64, count, analysis, tui: _ } => {
-                self.run_view(file, field, reserved, multicast, transition, documentation, protocol, special_purpose, eui64, *count, analysis)
+            Commands::View { file, field, include, exclude, unique, tui: _ } => {
+                self.run_view(file, field, include, exclude, unique)
+            }
+            Commands::Analyze { file, field, include, exclude, unique, analysis } => {
+                self.run_analyze(file, field, include, exclude, unique, analysis)
             }
             Commands::Serve { .. } => {
                 Err("Serve command cannot be executed remotely".to_string())
@@ -446,158 +546,142 @@ impl Commands {
             .map_err(|e| format!("Failed to create DataFrame: {}", e))
     }
 
-    fn run_view(&self, file: &PathBuf, field: &Option<String>, reserved: &Option<ReservedPredicate>, multicast: &Option<MulticastPredicate>, transition: &Option<TransitionPredicate>, documentation: &Option<DocumentationPredicate>, protocol: &Option<ProtocolPredicate>, special_purpose: &Option<SpecialPurposePredicate>, eui64: &Option<Eui64Predicate>, count: bool, analysis: &Option<ViewAnalysisCommand>) -> Result<DataFrame, String> {
+    fn run_view(&self, file: &PathBuf, field: &Option<String>, include: &Vec<AddressPredicate>, exclude: &Vec<AddressPredicate>, unique: &bool) -> Result<DataFrame, String> {
         let df = crate::source::load_file(file, field);
-        let processed_df = if let Some(reserved) = reserved {
-            let reserved_name = match reserved {
-                ReservedPredicate::Loopback => "loopback",
-                ReservedPredicate::Unspecified => "unspecified",
-                ReservedPredicate::LinkLocal => "link_local",
-                ReservedPredicate::UniqueLocal => "unique_local",
-            }.to_string();
-            let columns = df.get_columns();
-            if columns.len() == 1 {
-                let analyzer = FilterAnalysis::new(reserved_name.clone());
-                analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
-            } else {
-                let analyzer = FilterAnalysis::new(reserved_name.clone());
-                analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
-            }
-        } else if let Some(multicast) = multicast {
-            let multicast_name = match multicast {
-                MulticastPredicate::Multicast => "multicast",
-                MulticastPredicate::SolicitedNode => "solicited_node",
-            }.to_string();
-            let columns = df.get_columns();
-            if columns.len() == 1 {
-                let analyzer = FilterAnalysis::new(multicast_name.clone());
-                analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
-            } else {
-                let analyzer = FilterAnalysis::new(multicast_name.clone());
-                analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
-            }
-        } else if let Some(transition) = transition {
-            let transition_name = match transition {
-                TransitionPredicate::Ipv4Mapped => "ipv4_mapped",
-                TransitionPredicate::Ipv4ToIpv6 => "ipv4_to_ipv6",
-                TransitionPredicate::ExtendedIpv4 => "extended_ipv4",
-                TransitionPredicate::Ipv6ToIpv4 => "ipv6_to_ipv4",
-            }.to_string();
-            let columns = df.get_columns();
-            if columns.len() == 1 {
-                let analyzer = FilterAnalysis::new(transition_name.clone());
-                analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
-            } else {
-                let analyzer = FilterAnalysis::new(transition_name.clone());
-                analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
-            }
-        } else if let Some(documentation) = documentation {
-            let documentation_name = match documentation {
-                DocumentationPredicate::Documentation => "documentation",
-                DocumentationPredicate::Documentation2 => "documentation2",
-                DocumentationPredicate::Benchmarking => "benchmarking",
-            }.to_string();
-            let columns = df.get_columns();
-            if columns.len() == 1 {
-                let analyzer = FilterAnalysis::new(documentation_name.clone());
-                analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
-            } else {
-                let analyzer = FilterAnalysis::new(documentation_name.clone());
-                analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
-            }
-        } else if let Some(protocol) = protocol {
-            let protocol_name = match protocol {
-                ProtocolPredicate::Teredo => "teredo",
-                ProtocolPredicate::IetfProtocol => "ietf_protocol",
-                ProtocolPredicate::PortControl => "port_control",
-                ProtocolPredicate::Turn => "turn",
-                ProtocolPredicate::DnsSd => "dns_sd",
-                ProtocolPredicate::Amt => "amt",
-                ProtocolPredicate::SegmentRouting => "segment_routing",
-            }.to_string();
-            let columns = df.get_columns();
-            if columns.len() == 1 {
-                let analyzer = FilterAnalysis::new(protocol_name.clone());
-                analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
-            } else {
-                let analyzer = FilterAnalysis::new(protocol_name.clone());
-                analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
-            }
-        } else if let Some(special_purpose) = special_purpose {
-            let special_purpose_name = match special_purpose {
-                SpecialPurposePredicate::DiscardOnly => "discard_only",
-                SpecialPurposePredicate::DummyPrefix => "dummy_prefix",
-                SpecialPurposePredicate::As112V6 => "as112v6",
-                SpecialPurposePredicate::DirectAs112 => "direct_as112",
-                SpecialPurposePredicate::DeprecatedOrchid => "deprecated_orchid",
-                SpecialPurposePredicate::OrchidV2 => "orchid_v2",
-                SpecialPurposePredicate::DroneRemoteId => "drone_remote_id",
-            }.to_string();
-            let columns = df.get_columns();
-            if columns.len() == 1 {
-                let analyzer = FilterAnalysis::new(special_purpose_name.clone());
-                analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
-            } else {
-                let analyzer = FilterAnalysis::new(special_purpose_name.clone());
-                analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
-            }
-        } else if let Some(eui64) = eui64 {
-            let eui64_name = match eui64 {
-                Eui64Predicate::Eui64 => "eui64",
-                Eui64Predicate::LowByteHost => "low_byte_host",
-            }.to_string();
-            let columns = df.get_columns();
-            if columns.len() == 1 {
-                let analyzer = FilterAnalysis::new(eui64_name.clone());
-                analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
-            } else {
-                let analyzer = FilterAnalysis::new(eui64_name.clone());
-                analyzer.analyze(columns[0].as_series().unwrap()).unwrap()
-            }
-        } else {
-            df
-        };
-        if count {
-            let columns = processed_df.get_columns();
-            if columns.len() == 1 {
-                let analyzer = CountAnalysis::new(None);
-                let output = analyzer.analyze(columns[0].as_series().unwrap()).unwrap();
-                return Ok(output);
-            } else {
-                let analyzer = CountAnalysis::new(None);
-                let output = analyzer.analyze(columns[0].as_series().unwrap()).unwrap();
-                return Ok(output);
-            }
-        }
-        if let Some(analysis_cmd) = analysis {
-            let result = match analysis_cmd {
-                ViewAnalysisCommand::Unique => {
-                    crate::analyze::analyze(processed_df.clone(), crate::analyze::AnalysisType::Unique)
-                },
-                ViewAnalysisCommand::Dispersion => {
-                    crate::analyze::analyze(processed_df.clone(), crate::analyze::AnalysisType::Dispersion)
-                },
-                ViewAnalysisCommand::Entropy { start_bit, end_bit } => {
-                    if start_bit >= end_bit {
-                        return Err("start_bit must be less than end_bit".to_string());
-                    }
-                    crate::analyze::analyze(processed_df.clone(), crate::analyze::AnalysisType::Entropy {
-                        start_bit: *start_bit,
-                        end_bit: *end_bit,
-                    })
-                },
-                ViewAnalysisCommand::Subnets { max_subnets, prefix_length } => {
-                    crate::analyze::analyze(processed_df.clone(), crate::analyze::AnalysisType::Subnets {
-                        max_subnets: *max_subnets,
-                        prefix_length: *prefix_length,
-                    })
-                },
-            };
-            match result {
-                Ok(_) => return Ok(processed_df),
-                Err(e) => return Err(e.to_string()),
-            }
-        }
+        let processed_df = self.apply_filter_and_unique(df, include, exclude, unique)?;
         Ok(processed_df)
+    }
+
+    fn apply_filter_and_unique(&self, df: DataFrame, include: &Vec<AddressPredicate>, exclude: &Vec<AddressPredicate>, unique: &bool) -> Result<DataFrame, String> {
+        let mut processed_df = df;
+        
+        // Apply include filters first
+        for predicate in include {
+            processed_df = self.apply_filter(processed_df, predicate, true)?;
+        }
+        
+        // Apply exclude filters
+        for predicate in exclude {
+            processed_df = self.apply_filter(processed_df, predicate, false)?;
+        }
+        
+        // Apply unique filtering if requested
+        if *unique {
+            processed_df = self.apply_unique(processed_df)?;
+        }
+        
+        Ok(processed_df)
+    }
+
+    fn apply_filter(&self, df: DataFrame, filter_predicate: &AddressPredicate, include: bool) -> Result<DataFrame, String> {
+        // Check if dataframe is empty
+        if df.height() == 0 {
+            return Ok(df);
+        }
+        
+        let filter_name = filter_predicate.to_filter_name();
+        let all_predicates = get_all_predicates();
+        let predicate_fn = all_predicates
+            .into_iter()
+            .find(|(name, _)| name == &filter_name)
+            .map(|(_, func)| func)
+            .ok_or_else(|| format!("No predicate found with name: {}", filter_name))?;
+
+        // Parse IP addresses and apply filter
+        let columns = df.get_columns();
+        let series = if columns.len() == 1 {
+            columns[0].as_series().unwrap()
+        } else {
+            columns[0].as_series().unwrap()
+        };
+
+        let utf8_series = series.str().map_err(|e| format!("Failed to convert to string series: {}", e))?;
+        
+        // Create progress bar for filtering
+        let filter_pb = ProgressBar::new(utf8_series.len() as u64);
+        filter_pb.set_style(
+            ProgressStyle::default_bar()
+                .template("[{elapsed_precise}] {msg} [{bar:20.cyan/blue}] {pos}/{len}")
+                .expect("Failed to create progress bar template")
+                .progress_chars("█░")
+        );
+        let mode = if include { "Including" } else { "Excluding" };
+        filter_pb.set_message(format!("{} addresses with predicate: {}", mode, filter_name));
+        
+        // Parse IP addresses and collect filtered results
+        let mut filtered_addresses = Vec::new();
+        for (i, opt_str) in utf8_series.into_iter().enumerate() {
+            if let Some(s) = opt_str {
+                if let Ok(addr) = s.parse::<std::net::Ipv6Addr>() {
+                    let matches = predicate_fn(addr);
+                    if (include && matches) || (!include && !matches) {
+                        filtered_addresses.push(s);
+                    }
+                }
+            }
+            
+            // Update progress every 1000 items to avoid performance impact
+            if i % 1000 == 0 {
+                filter_pb.set_position(i as u64);
+            }
+        }
+        
+        filter_pb.finish_with_message(format!("{} complete! Found {} matching addresses", mode, filtered_addresses.len()));
+
+        // Create the filtered DataFrame
+        DataFrame::new(vec![
+            Series::new("address".into(), filtered_addresses).into(),
+        ]).map_err(|e| format!("Failed to create filtered DataFrame: {}", e))
+    }
+
+    fn apply_unique(&self, df: DataFrame) -> Result<DataFrame, String> {
+        let total_rows = df.height();
+        
+        // Create progress bar for unique operation
+        let unique_pb = ProgressBar::new(total_rows as u64);
+        unique_pb.set_style(
+            ProgressStyle::default_spinner()
+                .template("[{elapsed_precise}] {msg} {spinner}")
+                .expect("Failed to create progress bar template")
+                .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏")
+        );
+        unique_pb.set_message("Removing duplicate addresses...");
+        
+        // Apply unique filtering
+        let result = df.unique::<Vec<String>, Vec<String>>(None, UniqueKeepStrategy::First, None)
+            .map_err(|e| format!("Failed to apply unique filter: {}", e))?;
+        
+        let unique_count = result.height();
+        unique_pb.finish_with_message(format!("Unique filtering complete! Reduced from {} to {} addresses", total_rows, unique_count));
+        
+        Ok(result)
+    }
+
+    fn run_analyze(&self, file: &PathBuf, field: &Option<String>, include: &Vec<AddressPredicate>, exclude: &Vec<AddressPredicate>, unique: &bool, analysis: &AnalyzeCommand) -> Result<DataFrame, String> {
+        let df = crate::source::load_file(file, field);
+        let processed_df = self.apply_filter_and_unique(df, include, exclude, unique)?;
+        
+        // Run the analysis and return the results DataFrame
+        match analysis {
+            AnalyzeCommand::Dispersion => {
+                crate::analyze::analyze(processed_df, crate::analyze::AnalysisType::Dispersion)
+                    .map_err(|e| e.to_string())
+            },
+            AnalyzeCommand::Entropy { start_bit, end_bit } => {
+                if start_bit >= end_bit {
+                    return Err("start_bit must be less than end_bit".to_string());
+                }
+                crate::analyze::analyze(processed_df, crate::analyze::AnalysisType::Entropy {
+                    start_bit: *start_bit,
+                    end_bit: *end_bit,
+                }).map_err(|e| e.to_string())
+            },
+            AnalyzeCommand::Subnets { max_subnets, prefix_length } => {
+                crate::analyze::analyze(processed_df, crate::analyze::AnalysisType::Subnets {
+                    max_subnets: *max_subnets,
+                    prefix_length: *prefix_length,
+                }).map_err(|e| e.to_string())
+            },
+        }
     }
 } 

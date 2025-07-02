@@ -89,58 +89,58 @@ impl ProgressTracker {
     }
 }
 
-pub fn analyze(df: DataFrame, analysis_type: AnalysisType) -> Result<(), IoError> {
+pub fn analyze(df: DataFrame, analysis_type: AnalysisType) -> Result<DataFrame, IoError> {
     match analysis_type {
         AnalysisType::Unique => {
-            for series in df.get_columns() {
+            // For Unique analysis, return the first series result
+            if let Some(series) = df.get_columns().first() {
                 let analyzer = UniqueAnalysis::new(None);
-                let output = analyzer.analyze(series.as_series().unwrap()).unwrap();
-                crate::print_dataframe(&output);
+                analyzer.analyze(series.as_series().unwrap())
+                    .map_err(|e| IoError::new(std::io::ErrorKind::InvalidData, e.to_string()))
+            } else {
+                Err(IoError::new(std::io::ErrorKind::InvalidData, "No data to analyze"))
             }
         },
         AnalysisType::Dispersion => {
-            for series in df.get_columns() {
+            // For Dispersion analysis, return the first series result
+            if let Some(series) = df.get_columns().first() {
                 let mut analyzer = DispersionAnalysis::new();
                 analyze_column(series, &mut analyzer, df.height())?;
                 let output = analyzer.finalize();
-                crate::print_dataframe(&output);
+                Ok(output)
+            } else {
+                Err(IoError::new(std::io::ErrorKind::InvalidData, "No data to analyze"))
             }
         },
         AnalysisType::Entropy { start_bit, end_bit } => {
-            for series in df.get_columns() {
+            // For Entropy analysis, return the first series result
+            if let Some(series) = df.get_columns().first() {
                 let mut analyzer = ShannonEntropyAnalysis::new_with_options(start_bit, end_bit);
                 analyze_column(series, &mut analyzer, df.height())?;
                 let output = analyzer.finalize();
-                crate::print_dataframe(&output);
+                Ok(output)
+            } else {
+                Err(IoError::new(std::io::ErrorKind::InvalidData, "No data to analyze"))
             }
         },
         AnalysisType::Subnets { max_subnets, prefix_length } => {
-            for series in df.get_columns() {
+            // For Subnets analysis, return the first series result
+            if let Some(series) = df.get_columns().first() {
                 let mut analyzer = SubnetAnalysis::new_with_options(max_subnets, prefix_length);
                 analyze_column(series, &mut analyzer, df.height())?;
                 let output = analyzer.finalize();
-                crate::print_dataframe(&output);
+                Ok(output)
+            } else {
+                Err(IoError::new(std::io::ErrorKind::InvalidData, "No data to analyze"))
             }
         },
         AnalysisType::Special => {
-            /*for series in df.get_columns() {
-                let mut analyzer = SpecialAnalysis::new();
-                analyze_column(series, &mut analyzer, df.height())?;
-                let output = analyzer.finalize();
-                crate::print_dataframe(&output);
-            }*/
+            Err(IoError::new(std::io::ErrorKind::Unsupported, "Special analysis not yet implemented"))
         },
         AnalysisType::Eui64 => {
-            /*for series in df.get_columns() {
-                let mut analyzer = Eui64Analysis::new();
-                analyze_column(series, &mut analyzer, df.height())?;
-                let output = analyzer.finalize();
-                crate::print_dataframe(&output);
-            }*/
+            Err(IoError::new(std::io::ErrorKind::Unsupported, "EUI-64 analysis not yet implemented"))
         },
     }
-
-    Ok(())
 }
 
 fn analyze_column<A: AbsorbField<Ipv6Addr>>(

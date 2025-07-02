@@ -5,7 +5,6 @@ pub mod subnets;
 pub mod predicates;
 pub mod count;
 pub mod unique;
-pub mod filter;
 
 pub use statistics::{StatisticsAnalysis, StatisticsResults};
 pub use dispersion::{DispersionAnalysis, DispersionResults};
@@ -13,4 +12,3 @@ pub use entropy::{ShannonEntropyAnalysis, ShannonEntropyResults};
 pub use subnets::{SubnetAnalysis, SubnetResults};
 pub use count::{CountAnalysis, CountResults};
 pub use unique::{UniqueAnalysis, UniqueResults};
-pub use filter::{FilterAnalysis, FilterResults};
