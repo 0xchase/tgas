@@ -34,13 +34,6 @@ TODO: entropy, dispersion, subnet, classification, predicate filtering
 - **6Tree (2019)**: Hierarchical space tree with dynamic drilling
 - **6Scan (2023)**: Region-based scanning with continuous target list updates
 
-### 🚀 **High-Performance Architecture**
-- **gRPC Server**: Remote execution with full metrics and monitoring
-- **Plugin System**: Extensible architecture for custom algorithms
-- **Python Bindings**: Full Python API for integration and scripting
-- **Prometheus Metrics**: Comprehensive monitoring and observability
-- **Multi-threaded Scanning**: Parallel processing for high throughput
-
 ## Quick Start
 
 ### Installation
