@@ -23,12 +23,10 @@ impl UniqueAnalysis {
         );
         let _enter = span.enter();
 
-        // Configure rayon to use up to 8 threads
         rayon::ThreadPoolBuilder::new()
             .num_threads(8)
             .build_global()
             .unwrap_or_else(|_| {
-                // If global pool is already initialized, just continue
                 warn!("Could not set thread pool size (may already be initialized)");
             });
 
@@ -52,8 +50,6 @@ impl UniqueAnalysis {
             return Err(err_msg.into());
         }
 
-        // --- 2. Vectorized Parsing (Do this only ONCE) ---
-        // Cast the generic Series to its specific Utf8 type
         let utf8_series = series
             .str()
             .map_err(|e| format!("Failed to convert to string series: {}", e))?;
@@ -63,7 +59,6 @@ impl UniqueAnalysis {
             utf8_series.len()
         );
 
-        // Create progress bar for parsing phase
         let parse_pb = ProgressBar::new(utf8_series.len() as u64);
         parse_pb.set_style(
             ProgressStyle::default_bar()
@@ -73,7 +68,6 @@ impl UniqueAnalysis {
         );
         parse_pb.set_message("Parsing IPv6 addresses...");
 
-        // Parse IP addresses and collect results
         let mut parsed_ips = Vec::new();
         for (i, opt_str) in utf8_series.into_iter().enumerate() {
             if let Some(s) = opt_str {
@@ -86,7 +80,6 @@ impl UniqueAnalysis {
                 parsed_ips.push(None);
             }
 
-            // Update progress every 1000 items to avoid performance impact
             if i % 1000 == 0 {
                 parse_pb.set_position(i as u64);
             }
@@ -94,26 +87,22 @@ impl UniqueAnalysis {
         parse_pb.finish_with_message("IP address parsing complete!");
         info!("IP address parsing complete!");
 
-        // Filter out None values and get unique addresses
         let unique_addresses: std::collections::HashSet<Ipv6Addr> =
             parsed_ips.into_iter().filter_map(|opt| opt).collect();
 
         info!("Found {} unique IPv6 addresses", unique_addresses.len());
 
         if unique_addresses.is_empty() {
-            // Handle case where no IPs could be parsed.
             return Ok(DataFrame::new(vec![
                 Series::new("address".into(), &[] as &[String]).into(),
             ])?);
         }
 
-        // Convert unique addresses to strings for output
         let address_strings: Vec<String> = unique_addresses
             .into_iter()
             .map(|addr| addr.to_string())
             .collect();
 
-        // Create the final DataFrame with unique addresses
         let df = DataFrame::new(vec![Series::new("address".into(), address_strings).into()])?;
 
         info!("Unique analysis complete");

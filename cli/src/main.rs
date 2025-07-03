@@ -34,41 +34,6 @@ fn elapsed_subsec(state: &ProgressState, writer: &mut dyn std::fmt::Write) {
 }
 
 fn main() {
-    // Set up tracing with an indicatif progress bar layer
-    //let indicatif_layer = IndicatifLayer::new();
-    /*let indicatif_layer = IndicatifLayer::new().with_progress_style(
-        ProgressStyle::with_template(
-            "{color_start}Working... {wide_msg} [{bar:20.cyan/blue}] {pos}/{len} {elapsed_subsec}{color_end}",
-        )
-        .unwrap()
-        .with_key(
-            "elapsed_subsec",
-            elapsed_subsec,
-        )
-        .with_key(
-            "color_start",
-            |state: &ProgressState, writer: &mut dyn std::fmt::Write| {
-                let elapsed = state.elapsed();
-
-                if elapsed > Duration::from_secs(8) {
-                    // Red
-                    let _ = write!(writer, "\x1b[31m");
-                } else if elapsed > Duration::from_secs(4) {
-                    // Yellow
-                    let _ = write!(writer, "\x1b[33m");
-                }
-            },
-        )
-        .with_key(
-            "color_end",
-            |state: &ProgressState, writer: &mut dyn std::fmt::Write| {
-                if state.elapsed() > Duration::from_secs(4) {
-                    let _ =write!(writer, "\x1b[0m");
-                }
-            },
-        ),
-    ).with_span_child_prefix_symbol("↳ ").with_span_child_prefix_indent(" ");*/
-
     let fmt_layer = fmt::layer()
         .with_target(false)
         .with_span_events(fmt::format::FmtSpan::NONE)
@@ -88,9 +53,7 @@ fn main() {
         info!("Logging to file: {:?}", log_path);
     }
 
-    // Handle remote execution if --remote flag is provided
     if let Some(server_addr) = &cli.remote {
-        // Execute remotely by passing the command directly
         let rt = tokio::runtime::Runtime::new().unwrap();
         match rt.block_on(execute_remote_command(server_addr, &cli.command)) {
             Ok(df) => {

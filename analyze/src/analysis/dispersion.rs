@@ -103,7 +103,6 @@ impl AbsorbField<Ipv6Addr> for DispersionAnalysis {
             0.0
         };
 
-        // Clear addresses to free memory
         self.addresses.clear();
 
         DataFrame::new(vec![

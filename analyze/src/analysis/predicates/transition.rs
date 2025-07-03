@@ -7,7 +7,6 @@ pub struct Ipv4ToIpv6Predicate;
 pub struct ExtendedIpv4Ipv6Predicate;
 pub struct Ipv6ToIpv4Predicate;
 
-// IPv4-Mapped predicate
 impl PluginInfo for Ipv4MappedPredicate {
     const NAME: &'static str = "ipv4_mapped_predicate";
     const DESCRIPTION: &'static str = "Checks if IPv6 address is IPv4-mapped (::ffff:0:0/96)";
@@ -22,7 +21,6 @@ impl Predicate for Ipv4MappedPredicate {
     }
 }
 
-// IPv4 to IPv6 predicate
 impl PluginInfo for Ipv4ToIpv6Predicate {
     const NAME: &'static str = "ipv4_to_ipv6_predicate";
     const DESCRIPTION: &'static str =
@@ -38,7 +36,6 @@ impl Predicate for Ipv4ToIpv6Predicate {
     }
 }
 
-// Extended IPv4-IPv6 Translation predicate
 impl PluginInfo for ExtendedIpv4Ipv6Predicate {
     const NAME: &'static str = "extended_ipv4_ipv6_predicate";
     const DESCRIPTION: &'static str =
@@ -54,7 +51,6 @@ impl Predicate for ExtendedIpv4Ipv6Predicate {
     }
 }
 
-// IPv6 to IPv4 predicate
 impl PluginInfo for Ipv6ToIpv4Predicate {
     const NAME: &'static str = "ipv6_to_ipv4_predicate";
     const DESCRIPTION: &'static str = "Checks if IPv6 address is IPv6 to IPv4 (2002::/16)";

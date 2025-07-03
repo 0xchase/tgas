@@ -37,17 +37,14 @@ pub enum Target {
 
 impl Target {
     pub fn parse(input: &str) -> Result<Self, TargetError> {
-        // Try parsing as IP address first
         if let Ok(ip) = input.parse::<IpAddr>() {
             return Ok(Target::SingleIp(ip));
         }
 
-        // Try parsing as CIDR network
         if let Ok(net) = input.parse::<IpNet>() {
             return Ok(Target::Network(net));
         }
 
-        // Try resolving as hostname
         /*let resolver = AsyncResolver::tokio(
             ResolverConfig::default(),
             ResolverOpts::default(),
@@ -195,7 +192,6 @@ pub enum AddressPredicate {
 }
 
 impl AddressPredicate {
-    /// Convert the predicate to its corresponding filter name string
     pub fn to_filter_name(&self) -> String {
         match self {
             // Reserved predicates
@@ -616,17 +612,14 @@ impl Commands {
     ) -> Result<DataFrame, String> {
         let mut processed_df = df;
 
-        // Apply include filters first
         for predicate in include {
             processed_df = self.apply_filter(processed_df, predicate, true)?;
         }
 
-        // Apply exclude filters
         for predicate in exclude {
             processed_df = self.apply_filter(processed_df, predicate, false)?;
         }
 
-        // Apply unique filtering if requested
         if *unique {
             processed_df = self.apply_unique(processed_df)?;
         }
@@ -653,7 +646,6 @@ impl Commands {
             .map(|(_, func)| func)
             .ok_or_else(|| format!("No predicate found with name: {}", filter_name))?;
 
-        // Parse IP addresses and apply filter
         let columns = df.get_columns();
         let series = if columns.len() == 1 {
             columns[0].as_series().unwrap()
@@ -665,7 +657,6 @@ impl Commands {
             .str()
             .map_err(|e| format!("Failed to convert to string series: {}", e))?;
 
-        // Create progress bar for filtering
         let filter_pb = ProgressBar::new(utf8_series.len() as u64);
         filter_pb.set_style(
             ProgressStyle::default_bar()
@@ -679,7 +670,6 @@ impl Commands {
             mode, filter_name
         ));
 
-        // Parse IP addresses and collect filtered results
         let mut filtered_addresses = Vec::new();
         for (i, opt_str) in utf8_series.into_iter().enumerate() {
             if let Some(s) = opt_str {
@@ -691,7 +681,6 @@ impl Commands {
                 }
             }
 
-            // Update progress every 1000 items to avoid performance impact
             if i % 1000 == 0 {
                 filter_pb.set_position(i as u64);
             }
@@ -703,7 +692,6 @@ impl Commands {
             filtered_addresses.len()
         ));
 
-        // Create the filtered DataFrame
         DataFrame::new(vec![
             Series::new("address".into(), filtered_addresses).into(),
         ])
@@ -713,7 +701,6 @@ impl Commands {
     fn apply_unique(&self, df: DataFrame) -> Result<DataFrame, String> {
         let total_rows = df.height();
 
-        // Create progress bar for unique operation
         let unique_pb = ProgressBar::new(total_rows as u64);
         unique_pb.set_style(
             ProgressStyle::default_spinner()
@@ -723,7 +710,6 @@ impl Commands {
         );
         unique_pb.set_message("Removing duplicate addresses...");
 
-        // Apply unique filtering
         let result = df
             .unique::<Vec<String>, Vec<String>>(None, UniqueKeepStrategy::First, None)
             .map_err(|e| format!("Failed to apply unique filter: {}", e))?;
@@ -749,7 +735,6 @@ impl Commands {
         let df = crate::source::load_file(file, field);
         let processed_df = self.apply_filter_and_unique(df, include, exclude, unique)?;
 
-        // Run the analysis and return the results DataFrame
         match analysis {
             AnalyzeCommand::Dispersion => {
                 crate::analyze::analyze(processed_df, crate::analyze::AnalysisType::Dispersion)

@@ -14,7 +14,6 @@ use std::net::{IpAddr, Ipv4Addr, Ipv6Addr};
 use std::sync::mpsc::Sender;
 use std::time::{Duration, Instant};
 
-/// Represents the result of a single probe.
 #[derive(Debug)]
 pub struct ProbeResult {
     pub addr: IpAddr,
@@ -24,9 +23,8 @@ pub struct ProbeResult {
 pub fn icmp4_scan(network: ipnet::Ipv4Net) -> Vec<ProbeResult> {
     println!("Starting ICMPv4 scan of network: {}", network);
 
-    // Record scan start
-    counter!("ipv6kit_icmp4_scans_total", 1);
-    gauge!("ipv6kit_active_icmp4_scans", 1.0);
+    counter!("rmap_icmp4_scans_total", 1);
+    gauge!("rmap_active_icmp4_scans", 1.0);
 
     let (mut ts, mut tr) = transport::transport_channel(
         4096,
@@ -45,8 +43,7 @@ pub fn icmp4_scan(network: ipnet::Ipv4Net) -> Vec<ProbeResult> {
     let host_count = hosts.len();
     println!("Sending {} ICMPv4 Echo Requests...", host_count);
 
-    // Record total hosts to scan
-    counter!("ipv6kit_icmp4_hosts_total", host_count as u64);
+    counter!("rmap_icmp4_hosts_total", host_count as u64);
 
     for (i, host) in hosts.into_iter().enumerate() {
         send_icmpv4_echo_request(&mut ts, source_ip, host);
@@ -64,13 +61,12 @@ pub fn icmp4_scan(network: ipnet::Ipv4Net) -> Vec<ProbeResult> {
 
     let results: Vec<ProbeResult> = rx.try_iter().collect();
 
-    // Record scan results
-    counter!("ipv6kit_icmp4_responses_total", results.len() as u64);
+    counter!("rmap_icmp4_responses_total", results.len() as u64);
     if host_count > 0 {
         let response_rate = results.len() as f64 / host_count as f64;
-        gauge!("ipv6kit_icmp4_response_rate", response_rate);
+        gauge!("rmap_icmp4_response_rate", response_rate);
     }
-    gauge!("ipv6kit_active_icmp4_scans", 0.0);
+    gauge!("rmap_active_icmp4_scans", 0.0);
 
     println!(
         "ICMPv4 scan complete. Found {} responsive hosts.",
@@ -89,7 +85,6 @@ fn icmp4_receiver_thread(tr: &mut TransportReceiver, tx: Sender<ProbeResult>) {
                         icmp::echo_reply::EchoReplyPacket::new(packet.packet())
                     {
                         if echo_reply.get_identifier() == 0x1337 {
-                            // Check payload length for our timestamp
                             if !echo_reply.payload().is_empty() {
                                 let sent_time = u32::from_be_bytes(
                                     echo_reply.payload()[0..4].try_into().unwrap(),
@@ -125,7 +120,6 @@ fn icmp4_receiver_thread(tr: &mut TransportReceiver, tx: Sender<ProbeResult>) {
 }
 
 fn send_icmpv4_echo_request(sender: &mut TransportSender, _source_ip: Ipv4Addr, dest_ip: Ipv4Addr) {
-    // ICMP Header (8 bytes) + Payload (48 bytes)
     const PAYLOAD_SIZE: usize = 48;
     let mut buffer = [0u8; 8 + PAYLOAD_SIZE];
     let mut icmp_packet = MutableEchoRequestPacket::new(&mut buffer).unwrap();
@@ -134,15 +128,11 @@ fn send_icmpv4_echo_request(sender: &mut TransportSender, _source_ip: Ipv4Addr, 
     icmp_packet.set_identifier(0x1337);
     icmp_packet.set_sequence_number(0);
 
-    // Create the large payload, embedding our timestamp
     let mut payload = [0u8; PAYLOAD_SIZE];
     let now = Instant::now().elapsed().as_millis() as u32;
     payload[0..4].copy_from_slice(&now.to_be_bytes());
     icmp_packet.set_payload(&payload);
 
-    // *** THIS IS THE CRITICAL FIX ***
-    // Manually calculate the checksum and set it on the packet.
-    // Create a separate buffer for checksum calculation
     let mut csum_buffer = [0u8; 8 + PAYLOAD_SIZE];
     csum_buffer.copy_from_slice(&icmp_packet.packet());
     let csum_packet = icmp::MutableIcmpPacket::new(&mut csum_buffer).unwrap();
@@ -157,9 +147,8 @@ fn send_icmpv4_echo_request(sender: &mut TransportSender, _source_ip: Ipv4Addr, 
 pub fn icmp6_scan(network: ipnet::Ipv6Net) -> Vec<ProbeResult> {
     println!("Starting ICMPv6 scan of network: {}", network);
 
-    // Record scan start
-    counter!("ipv6kit_icmp6_scans_total", 1);
-    gauge!("ipv6kit_active_icmp6_scans", 1.0);
+    counter!("rmap_icmp6_scans_total", 1);
+    gauge!("rmap_active_icmp6_scans", 1.0);
 
     let (mut ts, mut tr) = transport::transport_channel(
         4096,
@@ -178,8 +167,7 @@ pub fn icmp6_scan(network: ipnet::Ipv6Net) -> Vec<ProbeResult> {
     let host_count = hosts.len();
     println!("Sending {} ICMPv6 Echo Requests...", host_count);
 
-    // Record total hosts to scan
-    counter!("ipv6kit_icmp6_hosts_total", host_count as u64);
+    counter!("rmap_icmp6_hosts_total", host_count as u64);
 
     for (i, host) in hosts.into_iter().enumerate() {
         send_icmpv6_echo_request(&mut ts, source_ip, host);
@@ -197,13 +185,12 @@ pub fn icmp6_scan(network: ipnet::Ipv6Net) -> Vec<ProbeResult> {
 
     let results: Vec<ProbeResult> = rx.try_iter().collect();
 
-    // Record scan results
-    counter!("ipv6kit_icmp6_responses_total", results.len() as u64);
+    counter!("rmap_icmp6_responses_total", results.len() as u64);
     if host_count > 0 {
         let response_rate = results.len() as f64 / host_count as f64;
-        gauge!("ipv6kit_icmp6_response_rate", response_rate);
+        gauge!("rmap_icmp6_response_rate", response_rate);
     }
-    gauge!("ipv6kit_active_icmp6_scans", 0.0);
+    gauge!("rmap_active_icmp6_scans", 0.0);
 
     println!(
         "ICMPv6 scan complete. Found {} responsive hosts.",
@@ -220,7 +207,6 @@ fn icmpv6_receiver_thread(tr: &mut TransportReceiver, tx: Sender<ProbeResult>) {
                 if let Some(echo_reply) = icmpv6::echo_reply::EchoReplyPacket::new(packet.packet())
                 {
                     if echo_reply.get_identifier() == 0x1337 {
-                        // Check payload length for our timestamp
                         if !echo_reply.payload().is_empty() {
                             let sent_time =
                                 u32::from_be_bytes(echo_reply.payload()[0..4].try_into().unwrap());
@@ -254,7 +240,6 @@ fn icmpv6_receiver_thread(tr: &mut TransportReceiver, tx: Sender<ProbeResult>) {
 }
 
 fn send_icmpv6_echo_request(sender: &mut TransportSender, source_ip: Ipv6Addr, dest_ip: Ipv6Addr) {
-    // ICMPv6 Header (8 bytes) + Payload (48 bytes)
     const PAYLOAD_SIZE: usize = 48;
     let mut buffer = [0u8; 8 + PAYLOAD_SIZE];
     let mut icmp_packet = MutableIcmpv6EchoRequestPacket::new(&mut buffer).unwrap();
@@ -262,7 +247,6 @@ fn send_icmpv6_echo_request(sender: &mut TransportSender, source_ip: Ipv6Addr, d
     icmp_packet.set_identifier(0x1337);
     icmp_packet.set_sequence_number(0);
 
-    // Create the large payload, embedding our timestamp
     let mut payload = [0u8; PAYLOAD_SIZE];
     let now = Instant::now().elapsed().as_millis() as u32;
     payload[0..4].copy_from_slice(&now.to_be_bytes());

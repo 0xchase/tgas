@@ -14,8 +14,6 @@ pub enum Format {
     Unknown,
 }
 
-/// Identifies the format of the input by examining its content.
-/// Returns Format::Unknown if the format cannot be confidently determined.
 pub fn identify_format<R: BufRead>(mut reader: R) -> Result<Format, IoError> {
     let mut first_line = String::new();
     if reader.read_line(&mut first_line)? == 0 {

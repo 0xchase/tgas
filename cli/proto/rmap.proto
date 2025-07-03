@@ -1,0 +1,57 @@
+syntax = "proto3";
+
+package rmap;
+
+service RmapService {
+  rpc Generate (GenerateRequest) returns (DataframeResponse);
+  rpc Scan (ScanRequest) returns (DataframeResponse);
+  rpc Discover (DiscoverRequest) returns (DataframeResponse);
+  
+  rpc ExecuteCommand (ExecuteCommandRequest) returns (DataframeResponse);
+}
+
+message GenerateRequest {
+  uint32 count = 1;
+  bool unique = 2;
+}
+
+message ScanRequest {
+  string target = 1;
+  ScanType scan_type = 2;
+  uint32 rate = 3;
+  uint32 probes = 4;
+  uint32 max_runtime = 5;
+  uint32 cooldown_time = 6;
+  uint64 seed = 7;
+  string source_port = 8;
+  string source_ip = 9;
+  string interface = 10;
+  ProbeModule probe_module = 11;
+  bool dryrun = 12;
+}
+
+message DiscoverRequest {
+  // TODO
+}
+
+message DataframeResponse {
+  string dataframe_json = 1;
+  bool success = 2;
+  string error = 3;
+}
+
+message ExecuteCommandRequest {
+  string command_json = 1;
+}
+
+enum ScanType {
+  ICMPV4 = 0;
+  ICMPV6 = 1;
+  LINK_LOCAL = 2;
+}
+
+enum ProbeModule {
+  TCP_SYN_SCAN = 0;
+  ICMP_ECHO_SCAN = 1;
+  UDP_SCAN = 2;
+} 

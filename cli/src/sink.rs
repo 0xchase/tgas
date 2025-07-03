@@ -2,7 +2,6 @@ use comfy_table::{Attribute, Cell, CellAlignment, ContentArrangement, Table};
 use polars::{frame::DataFrame, prelude::AnyValue};
 
 pub fn print_dataframe(df: &DataFrame) {
-    // If there's only one column, print as a simple list
     if df.get_column_names().len() == 1 {
         for i in 0..df.height() {
             let row = df.get_row(i).unwrap();
@@ -15,12 +14,10 @@ pub fn print_dataframe(df: &DataFrame) {
         return;
     }
 
-    // For multiple columns, use the table format
     let mut table = Table::new();
     table.set_content_arrangement(ContentArrangement::Dynamic);
     table.load_preset("     ──            ");
 
-    // Add headers
     let headers: Vec<Cell> = df
         .get_column_names()
         .iter()
@@ -28,7 +25,6 @@ pub fn print_dataframe(df: &DataFrame) {
         .collect();
     table.set_header(headers);
 
-    // Add data rows
     for i in 0..df.height() {
         let row = df.get_row(i).unwrap();
         let row_data: Vec<Cell> = row.0.iter().map(|val| format_cell(val)).collect();

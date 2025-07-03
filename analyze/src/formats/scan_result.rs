@@ -51,7 +51,6 @@ impl<R: BufRead> ScanResultIterator<R> {
         }
     }
 
-    /// Returns the number of bytes read from the input so far
     #[inline]
     pub fn bytes_read(&self) -> u64 {
         self.bytes_read

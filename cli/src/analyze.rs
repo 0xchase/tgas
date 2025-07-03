@@ -13,16 +13,12 @@ use analyze::analysis::{
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AnalysisType {
-    /// Address space dispersion metrics (distances between addresses)
     Dispersion,
-    /// Information entropy analysis
     Entropy { start_bit: u8, end_bit: u8 },
-    /// Subnet distribution analysis
     Subnets {
         max_subnets: usize,
         prefix_length: u8,
     },
-    /// Count addresses matching each predicate
     Counts,
 }
 
@@ -52,7 +48,7 @@ impl ProgressTracker {
             bytes_read: 0,
             item_type,
             last_update: Instant::now(),
-            update_interval: Duration::from_millis(50), // 50 updates per second
+            update_interval: Duration::from_millis(50),
         }
     }
 
@@ -74,7 +70,6 @@ impl ProgressTracker {
     }
 
     fn finish(mut self, success: bool) {
-        // Ensure final progress is shown
         self.update_progress();
 
         if success {
@@ -88,7 +83,6 @@ impl ProgressTracker {
 pub fn analyze(df: DataFrame, analysis_type: AnalysisType) -> Result<DataFrame, IoError> {
     match analysis_type {
         AnalysisType::Dispersion => {
-            // For Dispersion analysis, return the first series result
             if let Some(series) = df.get_columns().first() {
                 let mut analyzer = DispersionAnalysis::new();
                 analyze_column(series, &mut analyzer, df.height())?;
@@ -102,7 +96,6 @@ pub fn analyze(df: DataFrame, analysis_type: AnalysisType) -> Result<DataFrame, 
             }
         }
         AnalysisType::Entropy { start_bit, end_bit } => {
-            // For Entropy analysis, return the first series result
             if let Some(series) = df.get_columns().first() {
                 let mut analyzer = ShannonEntropyAnalysis::new_with_options(start_bit, end_bit);
                 analyze_column(series, &mut analyzer, df.height())?;
@@ -119,7 +112,6 @@ pub fn analyze(df: DataFrame, analysis_type: AnalysisType) -> Result<DataFrame, 
             max_subnets,
             prefix_length,
         } => {
-            // For Subnets analysis, return the first series result
             if let Some(series) = df.get_columns().first() {
                 let mut analyzer = SubnetAnalysis::new_with_options(max_subnets, prefix_length);
                 analyze_column(series, &mut analyzer, df.height())?;
@@ -133,7 +125,6 @@ pub fn analyze(df: DataFrame, analysis_type: AnalysisType) -> Result<DataFrame, 
             }
         }
         AnalysisType::Counts => {
-            // For Counts analysis, return the first series result
             if let Some(series) = df.get_columns().first() {
                 let mut analyzer = CountAnalysis::new(None);
                 analyze_column(series, &mut analyzer, df.height())?;

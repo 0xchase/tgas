@@ -4,7 +4,6 @@ use std::net::{IpAddr, Ipv6Addr};
 
 use crate::Plugin;
 
-// Attribute macro for easier plugin creation
 #[macro_export]
 macro_rules! plugin {
     (#[plugin(name = $name:expr, description = $desc:expr)] $($rest:tt)*) => {
@@ -19,7 +18,6 @@ macro_rules! plugin {
 
 pub fn test() {
     let series = Series::new("a".into(), &[1i32, 2, 3]);
-    // let df = DataFrame::new(vec![series.into()]).unwrap();
     let data = series.strict_cast(&DataType::Int32).unwrap();
 
     let mut frame = series.into_frame();
@@ -37,16 +35,6 @@ pub fn test() {
         .unwrap()
         .to_owned();
 
-    /*let d = dataframe
-    .clone()
-    .lazy()
-    // optional flag to select a column
-    .with_column(col("b").into())
-    .collect()
-    .unwrap();*/
-
-    // dataframe.replace_or_add("b".into(), data).unwrap();
-
     let field = Field::new("b".into(), DataType::Int32);
     let schema = Schema::from_iter(vec![field]);
 }
@@ -56,19 +44,16 @@ pub trait PluginInfo {
     const DESCRIPTION: &'static str;
 }
 
-// file, stdint, generator, etc
 pub trait Source: PluginInfo + Send + Sync {
     type Item;
     fn stream(&self) -> impl Iterator<Item = Self::Item>;
 }
 
-// file, graph, stdout, etc
 pub trait Sink: PluginInfo + Send + Sync {
     type Item;
     fn sink(&self, item: Self::Item);
 }
 
-// scan, filter, label, etc
 pub trait Transform: PluginInfo + Send + Sync {
     type In;
     type Out;
@@ -80,7 +65,6 @@ pub trait Predicate: PluginInfo + Send + Sync {
     fn predicate(&self, x: Self::In) -> bool;
 }
 
-// analyze, count, etc
 trait Aggregate: PluginInfo + Send + Sync {
     type Item;
     type Out;
@@ -88,7 +72,6 @@ trait Aggregate: PluginInfo + Send + Sync {
     fn aggregate(&self) -> Self::Out;
 }
 
-// BELOW IS OLD STUFF TO DELETE LATER
 pub trait MyField {
     const FIELD_NAME: &'static str;
     const FIELD_TYPE: &'static DataType;

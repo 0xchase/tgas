@@ -25,7 +25,6 @@ pub fn load_file(file: &PathBuf, field: &Option<String>) -> DataFrame {
     let mut lf = open_csv_lazy(file, field).unwrap();
     let schema = lf.collect_schema().unwrap();
 
-    // Collect all the columns that have an analysis
     let mut names = Vec::new();
     for (name, dtype) in schema.iter() {
         if dtype == &DataType::String {
@@ -33,7 +32,6 @@ pub fn load_file(file: &PathBuf, field: &Option<String>) -> DataFrame {
         }
     }
 
-    // Build an expression for the columns
     let expr = names
         .iter()
         .map(|name| col(name.to_string()))
@@ -42,7 +40,6 @@ pub fn load_file(file: &PathBuf, field: &Option<String>) -> DataFrame {
     lf.select(expr).collect().unwrap()
 }
 
-/// Load IPv6 addresses from a text file (one per line)
 pub fn load_ipv6_addresses_from_file(file: &PathBuf) -> Result<Vec<[u8; 16]>, String> {
     let file = File::open(file).map_err(|e| format!("Failed to open input file: {}", e))?;
 
@@ -53,12 +50,10 @@ pub fn load_ipv6_addresses_from_file(file: &PathBuf) -> Result<Vec<[u8; 16]>, St
         let line = line.map_err(|e| format!("Failed to read line {}: {}", line_num + 1, e))?;
         let line = line.trim();
 
-        // Skip empty lines and comments
         if line.is_empty() || line.starts_with('#') {
             continue;
         }
 
-        // Parse as IPv6 address
         let ip = Ipv6Addr::from_str(line).map_err(|e| {
             format!(
                 "Failed to parse IPv6 address on line {}: {}",
@@ -75,4 +70,23 @@ pub fn load_ipv6_addresses_from_file(file: &PathBuf) -> Result<Vec<[u8; 16]>, St
     }
 
     Ok(addresses)
+}
+
+pub fn load_dataframe(file: &PathBuf) -> Result<DataFrame, String> {
+    let mut lf = open_csv_lazy(file, &None)?;
+    let schema = lf.collect_schema().unwrap();
+
+    let mut names = Vec::new();
+    for (name, dtype) in schema.iter() {
+        if dtype == &DataType::String {
+            names.push(name.to_string());
+        }
+    }
+
+    let expr = names
+        .iter()
+        .map(|name| col(name.to_string()))
+        .collect::<Vec<_>>();
+
+    lf.select(expr).collect().map_err(|e| format!("Failed to collect DataFrame: {}", e))
 }

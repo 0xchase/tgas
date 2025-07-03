@@ -2,7 +2,7 @@ use std::io::{BufRead, Error as IoError};
 use std::mem;
 use std::net::IpAddr;
 
-const INITIAL_BUFFER_SIZE: usize = 48; // Slightly larger than max IPv6 string (39 chars) + newline
+const INITIAL_BUFFER_SIZE: usize = 48;
 
 pub struct IpListIterator<R> {
     reader: R,
@@ -71,7 +71,6 @@ impl<R: BufRead> Iterator for IpListIterator<R> {
 
     #[inline]
     fn size_hint(&self) -> (usize, Option<usize>) {
-        // We can't know the exact size without reading the whole file
         (0, None)
     }
 }

@@ -8,7 +8,6 @@ pub struct LinkLocalPredicate;
 pub struct UniqueLocalPredicate;
 pub struct IsGloballyRoutablePredicate;
 
-// Loopback predicate
 impl PluginInfo for LoopbackPredicate {
     const NAME: &'static str = "loopback_predicate";
     const DESCRIPTION: &'static str = "Checks if IPv6 address is loopback (::1/128)";
@@ -23,7 +22,6 @@ impl Predicate for LoopbackPredicate {
     }
 }
 
-// Unspecified predicate
 impl PluginInfo for UnspecifiedPredicate {
     const NAME: &'static str = "unspecified_predicate";
     const DESCRIPTION: &'static str = "Checks if IPv6 address is unspecified (::/128)";
@@ -38,7 +36,6 @@ impl Predicate for UnspecifiedPredicate {
     }
 }
 
-// Link Local predicate
 impl PluginInfo for LinkLocalPredicate {
     const NAME: &'static str = "link_local_predicate";
     const DESCRIPTION: &'static str = "Checks if IPv6 address is Link Local (fe80::/10)";
@@ -53,7 +50,6 @@ impl Predicate for LinkLocalPredicate {
     }
 }
 
-// Unique Local predicate
 impl PluginInfo for UniqueLocalPredicate {
     const NAME: &'static str = "unique_local_predicate";
     const DESCRIPTION: &'static str = "Checks if IPv6 address is Unique Local (fc00::/7)";
@@ -68,7 +64,6 @@ impl Predicate for UniqueLocalPredicate {
     }
 }
 
-// Globally Routable predicate
 impl PluginInfo for IsGloballyRoutablePredicate {
     const NAME: &'static str = "is_globally_routable_predicate";
     const DESCRIPTION: &'static str = "Checks if the address is globally routable (i.e., not private, loopback, link-local, documentation, etc.).";
@@ -78,13 +73,11 @@ impl Predicate for IsGloballyRoutablePredicate {
     type In = Ipv6Addr;
 
     fn predicate(&self, addr: Self::In) -> bool {
-        // Use our existing predicates to check if the address is globally routable
         let loopback_pred = LoopbackPredicate;
         let unspecified_pred = UnspecifiedPredicate;
         let link_local_pred = LinkLocalPredicate;
         let unique_local_pred = UniqueLocalPredicate;
 
-        // Import other predicates we need to check
         use crate::analysis::predicates::documentation::{
             Documentation2Predicate, DocumentationPredicate,
         };
@@ -96,7 +89,6 @@ impl Predicate for IsGloballyRoutablePredicate {
         let documentation_pred = DocumentationPredicate;
         let documentation2_pred = Documentation2Predicate;
 
-        // Check that the address is NOT any of the non-global types
         !loopback_pred.predicate(addr)
             && !unspecified_pred.predicate(addr)
             && !link_local_pred.predicate(addr)

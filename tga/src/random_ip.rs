@@ -3,10 +3,8 @@ use plugin::contracts::PluginInfo;
 use rand::Rng;
 use serde::{Deserialize, Serialize};
 
-/// TGA implementation that generates random IPv6 addresses
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RandomIpTga {
-    // No state needed for random generation
 }
 
 impl PluginInfo for RandomIpTga {
@@ -24,7 +22,6 @@ impl RandomIpTga {
 #[typetag::serde]
 impl TGA for RandomIpTga {
     fn train<T: IntoIterator<Item = [u8; 16]>>(_seeds: T) -> Result<Self, String> {
-        // No training needed for random generation
         Ok(RandomIpTga {})
     }
 

@@ -9,14 +9,12 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::sync::Once;
 
-/// Information about a Python TGA
 #[derive(Debug, Clone)]
 pub struct PythonTgaInfo {
     pub name: String,
     pub description: String,
 }
 
-/// Python TGA implementation using subprocess communication
 #[derive(Serialize, Deserialize)]
 pub struct PythonTGA {
     tga_name: String,
@@ -24,7 +22,6 @@ pub struct PythonTGA {
 }
 
 impl PythonTGA {
-    /// Create a new Python TGA instance
     pub fn new(tga_name: String) -> Self {
         Self {
             tga_name,
@@ -32,16 +29,13 @@ impl PythonTGA {
         }
     }
 
-    /// Train the TGA model using Python subprocess
     pub fn train_with_python(
         tga_name: &str,
         addresses: Vec<[u8; 16]>,
         kwargs: Value,
     ) -> Result<Self, String> {
-        // Convert addresses to hex strings
         let hex_addresses: Vec<String> = addresses.iter().map(|addr| hex::encode(addr)).collect();
 
-        // Prepare the command
         let command = json!({
             "command": "train",
             "tga_name": tga_name,
@@ -49,7 +43,6 @@ impl PythonTGA {
             "kwargs": kwargs
         });
 
-        // Execute the Python subprocess
         let result = Self::execute_python_command(&command)?;
 
         if let Some(error) = result.get("error") {
@@ -72,7 +65,6 @@ impl PythonTGA {
         })
     }
 
-    /// Generate addresses using the trained model
     pub fn generate_with_python(
         &self,
         count: usize,
@@ -104,7 +96,6 @@ impl PythonTGA {
             .and_then(|addrs| addrs.as_array())
             .ok_or_else(|| "No addresses in response".to_string())?;
 
-        // Convert hex strings back to bytes
         let mut result_addresses = Vec::new();
         for addr_hex in addresses {
             let hex_str = addr_hex
@@ -126,18 +117,14 @@ impl PythonTGA {
         Ok(result_addresses)
     }
 
-    /// Execute a Python command via subprocess
     fn execute_python_command(command: &Value) -> Result<Value, String> {
-        // Find the Python script path
         let script_path = Self::find_python_script()?;
 
-        // Find the Python executable
         let python_executable = Self::find_python_executable()?;
 
         println!("[DEBUG] Using Python executable: {}", python_executable);
         println!("[DEBUG] Using script path: {:?}", script_path);
 
-        // Start the Python subprocess
         let mut child = Command::new(&python_executable)
             .arg(&script_path)
             .stdin(Stdio::piped())
@@ -146,7 +133,6 @@ impl PythonTGA {
             .spawn()
             .map_err(|e| format!("Failed to start Python subprocess: {}", e))?;
 
-        // Send the command to stdin
         let stdin = child
             .stdin
             .as_mut()
@@ -160,7 +146,6 @@ impl PythonTGA {
         writeln!(stdin, "{}", command_str)
             .map_err(|e| format!("Failed to write to stdin: {}", e))?;
 
-        // Read the response from stdout
         let stdout = child
             .stdout
             .take()
@@ -172,18 +157,16 @@ impl PythonTGA {
         for line in reader.lines() {
             let line = line.map_err(|e| format!("Failed to read stdout: {}", e))?;
             response = line;
-            break; // We expect only one line of JSON response
+            break;
         }
 
         println!("[DEBUG] Received response: '{}'", response);
 
-        // Wait for the process to finish
         let status = child
             .wait()
             .map_err(|e| format!("Failed to wait for subprocess: {}", e))?;
 
         if !status.success() {
-            // Read stderr for error information
             let stderr = child
                 .stderr
                 .map(|mut stderr| {
@@ -197,20 +180,16 @@ impl PythonTGA {
             return Err(format!("Python subprocess failed: {}", stderr));
         }
 
-        // Parse the JSON response
         serde_json::from_str(&response).map_err(|e| format!("Failed to parse JSON response: {}", e))
     }
 
-    /// Find the Python script path
     fn find_python_script() -> Result<PathBuf, String> {
-        // Try to find the script relative to the current executable
         let mut script_path = std::env::current_exe()
             .map_err(|e| format!("Failed to get current executable path: {}", e))?
             .parent()
             .ok_or_else(|| "Failed to get executable directory".to_string())?
             .to_path_buf();
 
-        // Navigate to the python directory
         script_path.push("python");
         script_path.push("tga_runner.py");
 
@@ -218,7 +197,6 @@ impl PythonTGA {
             return Ok(script_path);
         }
 
-        // Try relative to the current working directory
         let mut script_path = std::env::current_dir()
             .map_err(|e| format!("Failed to get current directory: {}", e))?
             .join("python")
@@ -228,7 +206,6 @@ impl PythonTGA {
             return Ok(script_path);
         }
 
-        // Try relative to the crate root
         let mut script_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         script_path.push("python");
         script_path.push("tga_runner.py");
@@ -240,9 +217,7 @@ impl PythonTGA {
         Err("Could not find tga_runner.py script".to_string())
     }
 
-    /// Find the Python executable to use
     fn find_python_executable() -> Result<String, String> {
-        // First try to find a virtual environment in the python directory
         let mut venv_path = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
         venv_path.push("python");
         venv_path.push("venv");
@@ -253,12 +228,10 @@ impl PythonTGA {
             return Ok(venv_path.to_string_lossy().to_string());
         }
 
-        // Fallback to system python3
         Ok("python3".to_string())
     }
 }
 
-// Implement TGA trait for PythonTGA
 #[typetag::serde]
 impl TGA for PythonTGA {
     fn train<T: IntoIterator<Item = [u8; 16]>>(seeds: T) -> Result<Self, String>
@@ -271,7 +244,6 @@ impl TGA for PythonTGA {
     }
 
     fn generate(&self) -> [u8; 16] {
-        // Generate a single address
         let kwargs = serde_json::json!({});
         let addresses = self
             .generate_with_python(1, false, kwargs)
@@ -288,12 +260,10 @@ impl TGA for PythonTGA {
     }
 }
 
-// --- Dynamic Python TGA discovery ---
 
 static PYTHON_TGAS_INIT: Once = Once::new();
 static PYTHON_TGAS: Mutex<Vec<PythonTgaInfo>> = Mutex::new(Vec::new());
 
-/// Get available Python TGA information
 pub fn get_available_python_tga_infos() -> Result<Vec<PythonTgaInfo>, String> {
     PYTHON_TGAS_INIT.call_once(|| match query_python_tgas() {
         Ok(tgas) => {
@@ -308,7 +278,6 @@ pub fn get_available_python_tga_infos() -> Result<Vec<PythonTgaInfo>, String> {
     Ok(PYTHON_TGAS.lock().unwrap().clone())
 }
 
-/// Query Python TGAs via subprocess
 fn query_python_tgas() -> Result<Vec<PythonTgaInfo>, String> {
     let command = json!({
         "command": "list_tgas"
@@ -346,10 +315,7 @@ fn query_python_tgas() -> Result<Vec<PythonTgaInfo>, String> {
     Ok(python_tgas)
 }
 
-/// Get build-time discovered Python TGAs (empty for subprocess approach)
 pub fn get_build_time_python_tgas() -> Vec<(String, String)> {
-    // With subprocess approach, we don't need build-time discovery
-    // TGAs are discovered at runtime
     vec![]
 }
 
@@ -359,7 +325,6 @@ mod tests {
 
     #[test]
     fn test_python_tga_discovery() {
-        // This test will only work if Python and the required modules are available
         let result = get_available_python_tga_infos();
         match result {
             Ok(tgas) => {

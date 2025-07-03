@@ -12,7 +12,6 @@ use std::net::Ipv6Addr;
 
 pub fn get_all_predicates() -> Vec<(&'static str, fn(Ipv6Addr) -> bool)> {
     vec![
-        // Reserved predicates
         ("loopback", |addr| {
             reserved::LoopbackPredicate.predicate(addr)
         }),
@@ -25,16 +24,13 @@ pub fn get_all_predicates() -> Vec<(&'static str, fn(Ipv6Addr) -> bool)> {
         ("unique_local", |addr| {
             reserved::UniqueLocalPredicate.predicate(addr)
         }),
-        // ("is_globally_routable_predicate", |addr| reserved::IsGloballyRoutablePredicate.predicate(addr)),
 
-        // Multicast predicates
         ("multicast", |addr| {
             multicast::IsMulticastPredicate.predicate(addr)
         }),
         ("solicited_node", |addr| {
             multicast::SolicitedNodeMulticastPredicate.predicate(addr)
         }),
-        // Transition predicates
         ("ipv4_mapped", |addr| {
             transition::Ipv4MappedPredicate.predicate(addr)
         }),
@@ -47,7 +43,6 @@ pub fn get_all_predicates() -> Vec<(&'static str, fn(Ipv6Addr) -> bool)> {
         ("ipv6_to_ipv4", |addr| {
             transition::Ipv6ToIpv4Predicate.predicate(addr)
         }),
-        // Documentation predicates
         ("documentation", |addr| {
             documentation::DocumentationPredicate.predicate(addr)
         }),
@@ -57,7 +52,6 @@ pub fn get_all_predicates() -> Vec<(&'static str, fn(Ipv6Addr) -> bool)> {
         ("benchmarking", |addr| {
             documentation::BenchmarkingPredicate.predicate(addr)
         }),
-        // Protocol predicates
         ("teredo", |addr| protocols::TeredoPredicate.predicate(addr)),
         ("ietf_protocol", |addr| {
             protocols::IetfProtocolPredicate.predicate(addr)
@@ -71,7 +65,6 @@ pub fn get_all_predicates() -> Vec<(&'static str, fn(Ipv6Addr) -> bool)> {
         ("segment_routing", |addr| {
             protocols::SegmentRoutingPredicate.predicate(addr)
         }),
-        // Special purpose predicates
         ("discard_only", |addr| {
             special_purpose::DiscardOnlyPredicate.predicate(addr)
         }),
@@ -93,11 +86,9 @@ pub fn get_all_predicates() -> Vec<(&'static str, fn(Ipv6Addr) -> bool)> {
         ("drone_remote_id", |addr| {
             special_purpose::DroneRemoteIdPredicate.predicate(addr)
         }),
-        // EUI-64 predicates
         ("eui64", |addr| eui64::Eui64Analysis.predicate(addr)),
         ("low_byte_host", |addr| {
             eui64::IsLowByteHostPredicate.predicate(addr)
         }),
-        // ("is_privacy_extension_predicate", |addr| eui64::IsPrivacyExtensionPredicate.predicate(addr)),
     ]
 }

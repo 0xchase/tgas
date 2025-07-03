@@ -1,85 +1,171 @@
-# IPv6 Toolkit
+# rmap
 
-A toolkit for IPv6 network scanning, analysis, and address generation.
+A modular network scanner and analyzer focused on IPv6 with first-class support for Target Generation Algorithms (TGAs).
+
+## Overview
+
+Some overview paragraph goes here.
 
 ## Features
 
-- **Address Generation**: Generate IPv6 addresses using various algorithms (TGA - Target Generation Algorithms)
-- **Network Scanning**: ICMPv4, ICMPv6, and link-local discovery scanning
-- **Analysis**: Comprehensive analysis of IPv6 address sets including entropy, dispersion, and subnet analysis
-- **gRPC Server**: Remote execution capabilities with full metrics and monitoring
-- **Plugin System**: Extensible plugin architecture for custom algorithms and analysis
+### Scanning
+
+TODO: Support for various probe types.
+
+- Run as remote scanning server
+
+### Analysis
+
+TODO: entropy, dispersion, subnet, classification, predicate filtering
+
+### Target Generation Algorithms (TGAs)
+
+#### Statistical Methods
+- **6Gen (2017)**: Clusters seed addresses by Hamming distance and outputs unobserved neighbors
+- **6Graph (2022)**: Constructs co-occurrence graphs of address segments and recombines frequent subgraphs
+- **6Forest (2022)**: Builds multiple space-partitioning trees to cover diverse seed patterns
+- **DET (2022)**: Splits on highest-entropy bits for maximal variability
+- **Entropy/IP (2016)**: Measures nybble-level entropy and builds Bayesian models
+
+#### Machine Learning Methods
+- **6GCVAE (2020)**: Gated-CNN variational autoencoder for address generation
+- **6VecLM (2021)**: Transformer language model treating address blocks as tokens
+- **6GAN (2021)**: Clustered GANs with alias-aware rewards
+- **6Tree (2019)**: Hierarchical space tree with dynamic drilling
+- **6Scan (2023)**: Region-based scanning with continuous target list updates
+
+### 🚀 **High-Performance Architecture**
+- **gRPC Server**: Remote execution with full metrics and monitoring
+- **Plugin System**: Extensible architecture for custom algorithms
+- **Python Bindings**: Full Python API for integration and scripting
+- **Prometheus Metrics**: Comprehensive monitoring and observability
+- **Multi-threaded Scanning**: Parallel processing for high throughput
 
 ## Quick Start
 
 ### Installation
 
 ```bash
-git clone <repository-url>
-cd ipv6kit
-cargo build --release
+snap install rmap
 ```
 
 ### Basic Usage
 
 ```bash
-# Generate IPv6 addresses
-cargo run -- generate --count 100 --unique
+# Generate IPv6 addresses using TGAs
+rmap generate --count 1000 --unique
 
-# Scan a network
-cargo run -- scan --target 2001:db8::/64 --scan-type icmpv6
+# Scan a network range
+rmap scan 2001:db8::/64 --scan-type icmpv6 --rate 1000
 
-# Analyze address set
-cargo run -- analyze --input addresses.txt --analysis entropy
+# Analyze address patterns
+rmap analyze addresses.txt entropy --unique
 
-# Start gRPC server
-cargo run -- grpc --addr 0.0.0.0:50051
+# Start gRPC server for remote access
+rmap serve --addr 0.0.0.0:50051
 ```
+
+## Command-Line Reference
+
+### `generate`
+
+Generate IPv6 addresses using various TGAs:
+
+```bash
+rmap generate [OPTIONS]
+  -n, --count <COUNT>    Number of addresses to generate [default: 10]
+  -u, --unique          Ensure generated addresses are unique
+```
+
+### `scan`
+Perform network scanning with extensive configuration options:
+
+```bash
+rmap scan [OPTIONS] [TARGET]
+  [TARGET]              Target specification (IP, hostname, or CIDR range)
+  -s, --scan-type       Type of scan: icmpv4, icmpv6, link_local [default: icmpv4]
+  -I, --input-file      Input file containing targets (one per line)
+  -b, --blocklist-file  File containing CIDR ranges to exclude
+  -w, --allowlist-file  File containing CIDR ranges to include
+  -n, --max-targets     Maximum number of targets to probe
+  -r, --rate            Send rate in packets per second [default: 10000]
+  -P, --probes          Number of probes per target [default: 1]
+  -t, --max-runtime     Maximum runtime in seconds
+  -c, --cooldown-time   Cooldown time in seconds [default: 8]
+  -e, --seed            Random seed for target selection
+  -S, --source-ip       Source IP address(es) to use
+  -i, --interface       Network interface to use
+  -M, --probe-module    Probe type: tcp_syn_scan, icmp_echo_scan, udp_scan
+```
+
+### `analyze`
+Analyze address datasets with various metrics:
+
+```bash
+rmap analyze [OPTIONS] <FILE> <COMMAND>
+  <FILE>                Path to file containing data to analyze
+  
+  Commands:
+    dispersion          Address space dispersion metrics
+    entropy             Information entropy analysis
+    subnets             Subnet distribution analysis
+    counts              Count addresses matching each predicate
+  
+  Options:
+    -f, --field         Column name to select from input data
+    --include           Include addresses matching these predicates
+    --exclude           Exclude addresses matching these predicates
+    -u, --unique        Remove duplicate addresses before analysis
+```
+
+### `serve`
+Start gRPC server for remote command execution:
+
+```bash
+rmap serve [OPTIONS]
+  -a, --addr            Server address to bind to [default: 127.0.0.1:50051]
+  -m, --metrics-port    Prometheus metrics port [default: 9090]
+```
+
+## Address Classification
+
+rmap includes comprehensive IPv6 address classification with predicates for:
+
+- **Loopback**: ::1/128
+- **Unspecified**: ::/128
+- **Link-local**: fe80::/10
+- **Unique Local**: fc00::/7
+- **Multicast**: ff00::/8
+- **Solicited-node**: ff02::1:ff00:0/104
+- **IPv4-mapped**: ::ffff:0:0/96
+- **IPv4-compatible**: ::/96
+- **Documentation**: 2001:db8::/32
+- **Benchmarking**: 2001:2::/48
+- **Teredo**: 2001:0::/32
+- **And many more...**
 
 ## Metrics and Monitoring
 
-The IPv6 toolkit provides comprehensive metrics for monitoring and observability. When running the gRPC server, metrics are exposed via Prometheus format at `http://0.0.0.0:9090/metrics`.
+The rmap grpc server reports various metrics over opentelemetry for monitoring and observability with grafana.
 
-### Key Metrics
+### Metrics
 
-- **Request Metrics**: Total requests, success rates, and error counts
-- **Performance Metrics**: Generation and scan rates, durations, and throughput
-- **Operation Metrics**: Active operations, response rates, and discovery statistics
-- **Error Metrics**: Detailed error tracking by type and operation
+- `rmap_requests_total` - Total requests by status and operation
+- `rmap_addresses_generated_total` - Total addresses generated
+- `rmap_addresses_scanned_total` - Total addresses scanned
+- `rmap_scan_duration_ms` - Scan duration histograms
+- `rmap_generation_rate_aps` - Generation rate (addresses per second)
+- `rmap_active_generations` - Active generation operations
+- `rmap_active_scans` - Active scan operations
+- `rmap_errors_total` - Error counts by type
 
-### Available Metrics
+### Accessing Metrics
 
-- `ipv6kit_requests_total` - Total requests by status and operation
-- `ipv6kit_addresses_generated_total` - Total addresses generated
-- `ipv6kit_addresses_scanned_total` - Total addresses scanned
-- `ipv6kit_scan_duration_ms` - Scan duration histograms
-- `ipv6kit_generation_rate_aps` - Generation rate (addresses per second)
-- `ipv6kit_active_generations` - Active generation operations
-- `ipv6kit_active_scans` - Active scan operations
-- `ipv6kit_errors_total` - Error counts by type
-
-### Testing Metrics
-
-Run the metrics test script to verify functionality:
-
-```bash
-python3 test_metrics.py
-```
-
-For detailed metrics documentation, see [METRICS.md](METRICS.md).
-
-## Architecture
-
-The toolkit is organized into several modules:
-
-- **cli/**: Command-line interface and gRPC server
-- **scan/**: Network scanning capabilities
-- **analyze/**: Address analysis and statistics
-- **tga/**: Target Generation Algorithms
-- **plugin/**: Plugin system infrastructure
-- **python/**: Python bindings and extensions
+When running the gRPC server, metrics are exposed via Prometheus format at `http://0.0.0.0:9090/metrics`.
 
 ## Development
+
+Developing a plugin for rmap is easy.
 
 ### Building
 
@@ -88,25 +174,22 @@ cargo build
 cargo test
 ```
 
-### Running Tests
-
-```bash
-# Run all tests
-cargo test
-
-# Run specific module tests
-cargo test -p scan
-cargo test -p analyze
-```
-
 ### Adding Plugins
 
-Plugins can be added by implementing the appropriate traits:
+TODO: Explain how the plugins work.
 
-- `TGA` for address generation algorithms
-- `Predicate` for address classification
-- `AbsorbField` for analysis algorithms
+## Contributing
 
-## License
+TODO: Plugin contribution guide
 
-[Add your license information here] 
+## Citation
+
+Perhaps I'll publish a paper people can cite.
+
+```bibtex
+TODO: Publish a paper lol
+```
+
+## Acknowledgments
+
+Breakerspace, University of Maryland, contributors, etc

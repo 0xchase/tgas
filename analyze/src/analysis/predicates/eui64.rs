@@ -39,7 +39,6 @@ impl Predicate for IsPrivacyExtensionPredicate {
     type In = Ipv6Addr;
 
     fn predicate(&self, addr: Self::In) -> bool {
-        // Use the special predicates to check if it's a globally addressable address
         let loopback_pred = LoopbackPredicate;
         let unspecified_pred = UnspecifiedPredicate;
         let link_local_pred = LinkLocalPredicate;
@@ -66,9 +65,6 @@ impl Predicate for IsLowByteHostPredicate {
 
     fn predicate(&self, addr: Self::In) -> bool {
         let segments = addr.segments();
-        // Check if the last 64 bits (the interface ID) are less than 65536 (0xffff)
-        // This indicates the first 48 bits of the interface ID are zero.
-        // This pattern suggests manually configured addresses rather than auto-generated ones.
         segments[4] == 0 && segments[5] == 0 && segments[6] == 0 && segments[7] < 0xffff
     }
 }

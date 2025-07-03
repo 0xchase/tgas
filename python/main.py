@@ -9,8 +9,8 @@ from pydantic import BaseModel # For serializing actual results
 
 #from rich_argparse import RichHelpFormatter
 
-from ipv6kit.core.registry import get_all_plugins
-from ipv6kit.core.plugin import BasePlugin # Needed for isinstance checks
+from rmap.core.registry import get_all_plugins
+from rmap.core.plugin import BasePlugin # Needed for isinstance checks
 
 logger = logging.getLogger(__name__) # Logger for these utils
 
@@ -34,10 +34,10 @@ def setup_cli_logging_fire(verbose: bool = False, log_file_path_str: Optional[st
     )
 
 def main():
-    import ipv6kit.analyze
-    import ipv6kit.dataset
-    import ipv6kit.scan
-    import ipv6kit.tga
+    import rmap.analyze
+    import rmap.dataset
+    import rmap.scan
+    import rmap.tga
 
     all_plugins = get_all_plugins()
 

@@ -14,18 +14,17 @@ use tokio::sync::Mutex;
 use tonic::{Request, Response, Status, transport::Server};
 use tracing::{Level, info, span};
 
-pub mod ipv6kit {
-    tonic::include_proto!("ipv6kit");
+pub mod rmap {
+    tonic::include_proto!("rmap");
 }
 
-use ipv6kit::ipv6_kit_service_server::{Ipv6KitService, Ipv6KitServiceServer};
-use ipv6kit::{
+use rmap::rmap_service_server::{RmapService, RmapServiceServer};
+use rmap::{
     DataframeResponse, DiscoverRequest, ExecuteCommandRequest, GenerateRequest, ScanRequest,
 };
 
-/// gRPC server implementation for IPv6 toolkit with metrics
 #[derive(Default)]
-pub struct Ipv6KitServiceImpl {
+pub struct RmapServiceImpl {
     metrics: Arc<Mutex<ServerMetrics>>,
 }
 
@@ -39,7 +38,7 @@ struct ServerMetrics {
     total_addresses_discovered: u64,
 }
 
-impl Ipv6KitServiceImpl {
+impl RmapServiceImpl {
     pub fn new() -> Self {
         Self {
             metrics: Arc::new(Mutex::new(ServerMetrics::default())),
@@ -51,26 +50,26 @@ impl Ipv6KitServiceImpl {
         metrics.total_requests += 1;
         if success {
             metrics.successful_requests += 1;
-            counter!("ipv6kit_requests_total", 1, "status" => "success", "operation" => operation);
+            counter!("rmap_requests_total", 1, "status" => "success", "operation" => operation);
         } else {
             metrics.failed_requests += 1;
-            counter!("ipv6kit_requests_total", 1, "status" => "failed", "operation" => operation);
+            counter!("rmap_requests_total", 1, "status" => "failed", "operation" => operation);
         }
         let success_rate = if metrics.total_requests > 0 {
             metrics.successful_requests as f64 / metrics.total_requests as f64
         } else {
             0.0
         };
-        gauge!("ipv6kit_request_success_rate", success_rate);
+        gauge!("rmap_request_success_rate", success_rate);
     }
 
     async fn record_error(&self, error_type: &'static str, operation: &'static str) {
-        counter!("ipv6kit_errors_total", 1, "error_type" => error_type, "operation" => operation);
+        counter!("rmap_errors_total", 1, "error_type" => error_type, "operation" => operation);
     }
 }
 
 #[tonic::async_trait]
-impl Ipv6KitService for Ipv6KitServiceImpl {
+impl RmapService for RmapServiceImpl {
     async fn generate(
         &self,
         _request: Request<GenerateRequest>,
@@ -138,11 +137,10 @@ impl Ipv6KitService for Ipv6KitServiceImpl {
                     }
                 };
                 histogram!(
-                    "ipv6kit_execute_command_duration_ms",
+                    "rmap_execute_command_duration_ms",
                     duration.as_millis() as f64
                 );
 
-                // Log completion message based on command type
                 match command {
                     cli::Commands::Generate { count, unique } => {
                         info!(
@@ -174,7 +172,6 @@ impl Ipv6KitService for Ipv6KitServiceImpl {
                         info!("Train command completed");
                     }
                     cli::Commands::Serve { .. } => {
-                        // Serve command is handled separately, shouldn't reach here
                     }
                 }
 
@@ -193,13 +190,12 @@ impl Ipv6KitService for Ipv6KitServiceImpl {
     }
 }
 
-/// Run the gRPC server with Prometheus metrics
 pub async fn run_server(
     addr: &str,
     metrics_port: Option<u16>,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let addr = addr.parse()?;
-    let service = Ipv6KitServiceImpl::new();
+    let service = RmapServiceImpl::new();
     let metrics_port = metrics_port.unwrap_or(9090);
     if metrics_port == 0 {
         println!("Metrics disabled (port 0 specified)");
@@ -213,8 +209,8 @@ pub async fn run_server(
                     "Prometheus metrics available at http://0.0.0.0:{}/metrics",
                     metrics_port
                 );
-                counter!("ipv6kit_server_starts_total", 1);
-                gauge!("ipv6kit_server_up", 1.0);
+                counter!("rmap_server_starts_total", 1);
+                gauge!("rmap_server_up", 1.0);
             }
             Err(e) => {
                 eprintln!(
@@ -231,24 +227,22 @@ pub async fn run_server(
     }
     println!("Starting gRPC server on {}", addr);
     Server::builder()
-        .add_service(Ipv6KitServiceServer::new(service))
+        .add_service(RmapServiceServer::new(service))
         .serve(addr)
         .await?;
     Ok(())
 }
 
-/// Execute a remote command using the gRPC client
 pub async fn execute_remote_command(
     server_addr: &str,
     command: &cli::Commands,
 ) -> Result<DataFrame, Box<dyn std::error::Error>> {
-    // Create a progress spinner
     let pb = ProgressBar::new_spinner();
     pb.set_style(
         ProgressStyle::default_spinner()
             .template("{spinner:.green} {msg}")
             .unwrap()
-            .tick_chars("⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏"),
+            .tick_chars("|/-\\")
     );
     pb.set_message("Connecting to server...");
     pb.enable_steady_tick(std::time::Duration::from_millis(100));
@@ -270,9 +264,8 @@ pub async fn execute_remote_command(
     Ok(df)
 }
 
-/// gRPC client for the IPv6 toolkit
 pub struct GrpcClient {
-    client: ipv6kit::ipv6_kit_service_client::Ipv6KitServiceClient<tonic::transport::Channel>,
+    client: rmap::rmap_service_client::RmapServiceClient<tonic::transport::Channel>,
 }
 
 impl GrpcClient {
@@ -283,7 +276,7 @@ impl GrpcClient {
             format!("http://{}", addr)
         };
 
-        let client = ipv6kit::ipv6_kit_service_client::Ipv6KitServiceClient::connect(url).await?;
+        let client = rmap::rmap_service_client::RmapServiceClient::connect(url).await?;
 
         Ok(GrpcClient { client })
     }

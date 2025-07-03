@@ -10,7 +10,6 @@ pub struct DnsSdPredicate;
 pub struct AmtPredicate;
 pub struct SegmentRoutingPredicate;
 
-// Teredo predicate
 impl PluginInfo for TeredoPredicate {
     const NAME: &'static str = "teredo_predicate";
     const DESCRIPTION: &'static str = "Checks if IPv6 address is Teredo (2001::/32)";
@@ -25,7 +24,6 @@ impl Predicate for TeredoPredicate {
     }
 }
 
-// IETF Protocol predicate
 impl PluginInfo for IetfProtocolPredicate {
     const NAME: &'static str = "ietf_protocol_predicate";
     const DESCRIPTION: &'static str = "Checks if IPv6 address is IETF protocol (2001::/23)";
@@ -40,7 +38,6 @@ impl Predicate for IetfProtocolPredicate {
     }
 }
 
-// Port Control Protocol predicate
 impl PluginInfo for PortControlProtocolPredicate {
     const NAME: &'static str = "port_control_protocol_predicate";
     const DESCRIPTION: &'static str =
@@ -56,7 +53,6 @@ impl Predicate for PortControlProtocolPredicate {
     }
 }
 
-// TURN predicate
 impl PluginInfo for TurnPredicate {
     const NAME: &'static str = "turn_predicate";
     const DESCRIPTION: &'static str = "Checks if IPv6 address is TURN (2001:1::2/128)";
@@ -71,7 +67,6 @@ impl Predicate for TurnPredicate {
     }
 }
 
-// DNS-SD predicate
 impl PluginInfo for DnsSdPredicate {
     const NAME: &'static str = "dns_sd_predicate";
     const DESCRIPTION: &'static str = "Checks if IPv6 address is DNS-SD (2001:1::3/128)";
@@ -86,7 +81,6 @@ impl Predicate for DnsSdPredicate {
     }
 }
 
-// AMT predicate
 impl PluginInfo for AmtPredicate {
     const NAME: &'static str = "amt_predicate";
     const DESCRIPTION: &'static str = "Checks if IPv6 address is AMT (2001:3::/32)";
@@ -101,7 +95,6 @@ impl Predicate for AmtPredicate {
     }
 }
 
-// Segment Routing predicate
 impl PluginInfo for SegmentRoutingPredicate {
     const NAME: &'static str = "segment_routing_predicate";
     const DESCRIPTION: &'static str = "Checks if IPv6 address is Segment Routing (5f00::/16)";

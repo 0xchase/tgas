@@ -31,7 +31,6 @@ impl SubnetAnalysis {
         } else {
             addr_u128 >> (128 - self.prefix_length)
         };
-        // Convert back to IPv6 address and format properly
         let subnet_addr = Ipv6Addr::from(prefix << (128 - self.prefix_length));
         format!("{}/{}", subnet_addr, self.prefix_length)
     }

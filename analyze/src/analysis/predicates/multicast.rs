@@ -5,7 +5,6 @@ use std::net::Ipv6Addr;
 pub struct IsMulticastPredicate;
 pub struct SolicitedNodeMulticastPredicate;
 
-// Multicast predicate
 impl PluginInfo for IsMulticastPredicate {
     const NAME: &'static str = "is_multicast_predicate";
     const DESCRIPTION: &'static str = "Checks if IPv6 address is multicast (ff00::/8)";
@@ -20,7 +19,6 @@ impl Predicate for IsMulticastPredicate {
     }
 }
 
-// Solicited-Node Multicast predicate
 impl PluginInfo for SolicitedNodeMulticastPredicate {
     const NAME: &'static str = "solicited_node_multicast_predicate";
     const DESCRIPTION: &'static str =

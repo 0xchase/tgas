@@ -6,7 +6,6 @@ pub struct DocumentationPredicate;
 pub struct Documentation2Predicate;
 pub struct BenchmarkingPredicate;
 
-// Documentation predicate
 impl PluginInfo for DocumentationPredicate {
     const NAME: &'static str = "documentation_predicate";
     const DESCRIPTION: &'static str = "Checks if IPv6 address is documentation (2001:db8::/32)";
@@ -21,7 +20,6 @@ impl Predicate for DocumentationPredicate {
     }
 }
 
-// Documentation 2 predicate
 impl PluginInfo for Documentation2Predicate {
     const NAME: &'static str = "documentation_2_predicate";
     const DESCRIPTION: &'static str = "Checks if IPv6 address is documentation (3fff::/20)";
@@ -36,7 +34,6 @@ impl Predicate for Documentation2Predicate {
     }
 }
 
-// Benchmarking predicate
 impl PluginInfo for BenchmarkingPredicate {
     const NAME: &'static str = "benchmarking_predicate";
     const DESCRIPTION: &'static str = "Checks if IPv6 address is benchmarking (2001:2::/48)";
