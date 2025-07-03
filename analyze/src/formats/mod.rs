@@ -27,7 +27,6 @@ pub fn identify_format<R: BufRead>(mut reader: R) -> Result<Format, IoError> {
 
     let trimmed = first_line.trim();
     if trimmed.is_empty() || trimmed.starts_with('#') {
-        // Skip empty lines and comments until we find content
         while reader.read_line(&mut first_line)? > 0 {
             let trimmed = first_line.trim();
             if !trimmed.is_empty() && !trimmed.starts_with('#') {
@@ -38,7 +37,6 @@ pub fn identify_format<R: BufRead>(mut reader: R) -> Result<Format, IoError> {
     }
 
     let trimmed = first_line.trim();
-    // Determine format based on content
     Ok(
         if trimmed.contains(',') && trimmed.to_lowercase().contains("saddr") {
             Format::ScanResult

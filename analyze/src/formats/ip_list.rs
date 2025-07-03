@@ -7,34 +7,20 @@ const INITIAL_BUFFER_SIZE: usize = 48; // Slightly larger than max IPv6 string (
 pub struct IpListIterator<R> {
     reader: R,
     line_buffer: String,
-    bytes_read: u64,
-    #[allow(dead_code)]
     total_lines: usize,
+    bytes_read: u64,
 }
 
 impl<R: BufRead> IpListIterator<R> {
-    #[inline]
     pub fn new(reader: R) -> Self {
         Self {
             reader,
-            line_buffer: String::with_capacity(INITIAL_BUFFER_SIZE),
-            bytes_read: 0,
+            line_buffer: String::new(),
             total_lines: 0,
+            bytes_read: 0,
         }
     }
 
-    #[inline]
-    pub fn with_capacity(reader: R, capacity: usize) -> Self {
-        Self {
-            reader,
-            line_buffer: String::with_capacity(capacity.max(INITIAL_BUFFER_SIZE)),
-            bytes_read: 0,
-            total_lines: 0,
-        }
-    }
-
-    /// Returns the number of bytes read from the input so far
-    #[inline]
     pub fn bytes_read(&self) -> u64 {
         self.bytes_read
     }
@@ -46,23 +32,16 @@ impl<R: BufRead> Iterator for IpListIterator<R> {
     #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         loop {
-            // Clear buffer without deallocating
             self.line_buffer.clear();
-
-            // Read next line
             match self.reader.read_line(&mut self.line_buffer) {
-                Ok(0) => return None, // EOF
+                Ok(0) => return None,
                 Ok(n) => {
                     self.total_lines += 1;
                     self.bytes_read += n as u64;
-
-                    // Fast path: check if empty or comment without allocating a new string
                     let line = self.line_buffer.as_bytes();
                     if line.is_empty() || line[0] == b'#' {
                         continue;
                     }
-
-                    // Trim in place to avoid allocation
                     let start = line
                         .iter()
                         .position(|&b| !b.is_ascii_whitespace())
@@ -72,17 +51,12 @@ impl<R: BufRead> Iterator for IpListIterator<R> {
                         .rposition(|&b| !b.is_ascii_whitespace())
                         .unwrap_or(0);
                     if start > end {
-                        continue; // Empty line
+                        continue;
                     }
-
-                    // Get trimmed slice without allocating
                     let trimmed = unsafe { std::str::from_utf8_unchecked(&line[start..=end]) };
-
-                    // Parse IP address
                     match trimmed.parse::<IpAddr>() {
                         Ok(addr) => return Some(Ok(addr)),
                         Err(e) => {
-                            // Only allocate string for error case
                             return Some(Err(IoError::new(
                                 std::io::ErrorKind::InvalidData,
                                 format!("Failed to parse IP address '{}': {}", trimmed, e),

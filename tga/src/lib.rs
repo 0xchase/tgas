@@ -17,44 +17,17 @@ pub use python_tga::get_available_python_tga_infos;
 pub use random_ip::RandomIpTga;
 use serde::{Serialize, de::DeserializeOwned};
 
-// generates new targets given a seed
-/*
-Don't use static and dynamic TGAs
-- Pure algorithmic methods are a simple TGA type
-- Training a model may output a TGA
-- Dynamic TGAs transform a TGA into another TGA
-*/
-
-// Things for tgas to do
-/*
-- Transform a list of targets into a new list of targets
-- Transform a list of targets into a model
-  - Transform a model into a target iterator
-- Only generate for part of the prefix space
-- Should operate on byte slices of a fixed size
-
-IpNetModel is an IPAddr iterator
-
-  */
-
-/// Trait for TGA metadata (name and description)
 pub trait TgaInfo {
     const NAME: &'static str;
     const DESCRIPTION: &'static str;
 }
 
-/// The struct that implements this trait will specify the settings for that TGA
 #[typetag::serde]
 pub trait TGA: Send + Sync {
-    /// Build the model of the address space from a list of seeds
     fn train<T: IntoIterator<Item = [u8; 16]>>(seeds: T) -> Result<Self, String>
     where
         Self: Sized;
-
-    /// Generate new targets from the model
     fn generate(&self) -> [u8; 16];
-
-    /// Generate a specified number of unique addresses
     fn generate_unique(&self, count: usize) -> Vec<[u8; 16]> {
         const MAX_ATTEMPTS: usize = 1_000_000;
         let mut set = HashSet::new();
@@ -65,11 +38,7 @@ pub trait TGA: Send + Sync {
         }
         set.into_iter().collect()
     }
-
-    /// Get the name of this TGA type
     fn name(&self) -> &'static str;
-
-    /// Get the description of this TGA type
     fn description(&self) -> &'static str;
 }
 
@@ -82,7 +51,6 @@ pub struct TgaRegistration {
 
 inventory::collect!(TgaRegistration);
 
-// --- Dynamic Python TGA registration ---
 use std::sync::Arc;
 use std::sync::Mutex;
 
@@ -92,8 +60,6 @@ static DYNAMIC_PYTHON_TGAS: Mutex<Vec<TgaRegistration>> = Mutex::new(Vec::new())
 fn get_dynamic_python_tgas() -> Vec<TgaRegistration> {
     DYNAMIC_PYTHON_TGAS_INIT.call_once(|| {
         println!("[DEBUG] Querying Python TGA registry...");
-
-        // Query Python TGAs at runtime
         let python_tga_infos = match python_tga::get_available_python_tga_infos() {
             Ok(list) => list,
             Err(e) => {
@@ -106,7 +72,6 @@ fn get_dynamic_python_tgas() -> Vec<TgaRegistration> {
         for info in python_tga_infos {
             let name = info.name;
             let description = info.description;
-            // Box the name/description to get 'static lifetime
             let name_static: &'static str = Box::leak(name.into_boxed_str());
             let desc_static: &'static str = Box::leak(description.into_boxed_str());
             regs.push(TgaRegistration {
@@ -147,7 +112,6 @@ fn generic_python_tga_train_fn(addresses: Vec<[u8; 16]>) -> Box<dyn TGA> {
     Box::new(python_tga)
 }
 
-/// Registry for TGA implementations
 pub struct TgaRegistry;
 
 impl TgaRegistry {
@@ -158,14 +122,12 @@ impl TgaRegistry {
             .collect();
         names
     }
-
     pub fn get_tga_description(name: &str) -> Option<&'static str> {
         inventory::iter::<TgaRegistration>
             .into_iter()
             .find(|reg| reg.name == name)
             .map(|reg| reg.description)
     }
-
     pub fn train_tga(
         name: &str,
         addresses: Vec<[u8; 16]>,
@@ -176,7 +138,6 @@ impl TgaRegistry {
         {
             Ok((reg.train_fn)(addresses))
         } else {
-            // Try Python TGAs
             let python_tgas = get_dynamic_python_tgas();
             if let Some(reg) = python_tgas.iter().find(|reg| reg.name == name) {
                 Ok((reg.train_fn)(addresses))
@@ -185,16 +146,13 @@ impl TgaRegistry {
             }
         }
     }
-
     pub fn deserialize_tga(
         model_data: &[u8],
     ) -> Result<Box<dyn TGA + Sync + Send + 'static>, String> {
-        // Try to deserialize as a trait object using typetag
         bincode::deserialize::<Box<dyn TGA>>(model_data)
             .map(|b| b as Box<dyn TGA + Sync + Send + 'static>)
             .map_err(|e| format!("Failed to deserialize model: {}", e))
     }
-
     pub fn get_tga_help_text() -> String {
         let mut help = String::from("Type of TGA to train. Available types:\n");
         for reg in inventory::iter::<TgaRegistration> {
@@ -207,7 +165,6 @@ impl TgaRegistry {
 #[cfg(test)]
 mod tests {
     use super::*;
-
     #[test]
     fn test_inventory_registration() {
         let tgas = TgaRegistry::get_available_tgas();
@@ -220,7 +177,6 @@ mod tests {
             tgas.contains(&"random_ip"),
             "random_ip not found in registry"
         );
-
         let help_text = TgaRegistry::get_tga_help_text();
         assert!(
             help_text.contains("entropy_ip"),
@@ -230,15 +186,12 @@ mod tests {
             help_text.contains("random_ip"),
             "Help text missing random_ip"
         );
-
         println!("Registered TGAs: {:?}", tgas);
         println!("Help text:\n{}", help_text);
     }
 }
 
 pub fn generate(count: usize, unique: bool) {
-    // Sample IPv6 addresses inspired by patterns discussed in the paper.
-    // Some have structured prefixes, some have similar interface IDs.
     let seed_ips: Vec<[u8; 16]> = vec![
         Ipv6Addr::new(0x2001, 0x0db8, 0x0001, 0x0001, 0, 0, 0, 0x0001).octets(),
         Ipv6Addr::new(0x2001, 0x0db8, 0x0001, 0x0001, 0, 0, 0, 0x0002).octets(),
@@ -247,7 +200,6 @@ pub fn generate(count: usize, unique: bool) {
         Ipv6Addr::new(0x2001, 0x0db8, 0x0002, 0x000a, 0, 0, 0, 0x000a).octets(),
         Ipv6Addr::new(0x2001, 0x0db8, 0x0002, 0x000a, 0, 0, 0, 0x000b).octets(),
         Ipv6Addr::new(0x2001, 0x0db8, 0x0002, 0x000b, 0, 0, 0, 0x000a).octets(),
-        // Add an address that's quite different to influence entropy
         Ipv6Addr::new(
             0x2001, 0x0db8, 0x1111, 0x2222, 0x3333, 0x4444, 0x5555, 0x6666,
         )
@@ -261,13 +213,11 @@ pub fn generate(count: usize, unique: bool) {
     println!("Building model from {} seed addresses...", seed_ips.len());
     let tga = EntropyIpTga::train(seed_ips).expect("Failed to train model");
 
-    // For unique generation, we'll keep track of what we've generated
     let mut generated = HashSet::new();
     let mut i = 0;
     let mut attempts = 0;
-    const MAX_ATTEMPTS: usize = 1_000_000; // Prevent infinite loops
+    const MAX_ATTEMPTS: usize = 1_000_000;
 
-    // Generate new candidate addresses from the model.
     while i < count {
         let generated_bytes = tga.generate();
         let generated_ip = Ipv6Addr::from(generated_bytes);

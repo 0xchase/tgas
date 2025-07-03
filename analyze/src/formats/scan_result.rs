@@ -28,7 +28,6 @@ impl<R: BufRead> ScanResultIterator<R> {
             header_read: false,
         };
 
-        // Read and parse header
         iter.line_buffer.clear();
         match iter.reader.read_line(&mut iter.line_buffer) {
             Ok(0) => return Err(IoError::from(std::io::ErrorKind::UnexpectedEof)),
@@ -70,12 +69,12 @@ impl<R: BufRead> Iterator for ScanResultIterator<R> {
         loop {
             self.line_buffer.clear();
             match self.reader.read_line(&mut self.line_buffer) {
-                Ok(0) => return None, // EOF
+                Ok(0) => return None,
                 Ok(n) => {
                     self.bytes_read += n as u64;
                     let line = self.line_buffer.trim();
                     if line.is_empty() || line.starts_with('#') {
-                        continue; // Skip empty lines and comments
+                        continue;
                     }
 
                     let fields: Vec<String> =

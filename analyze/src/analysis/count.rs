@@ -14,12 +14,9 @@ impl CountAnalysis {
     pub fn new(predicate_name: Option<String>) -> Self {
         let all_predicates = get_all_predicates();
         let mut predicate_counts = HashMap::new();
-        
-        // Initialize all predicates with zero count
         for (name, _) in &all_predicates {
             predicate_counts.insert(*name, 0);
         }
-        
         Self {
             predicate_name,
             predicate_counts,
@@ -33,7 +30,6 @@ impl AbsorbField<Ipv6Addr> for CountAnalysis {
 
     fn absorb(&mut self, addr: Ipv6Addr) {
         self.total_addresses += 1;
-        
         let all_predicates = get_all_predicates();
         let predicates_to_check = if let Some(ref name) = self.predicate_name {
             all_predicates
@@ -43,7 +39,6 @@ impl AbsorbField<Ipv6Addr> for CountAnalysis {
         } else {
             all_predicates
         };
-        
         for (name, predicate_fn) in predicates_to_check {
             if predicate_fn(addr) {
                 let count = self.predicate_counts.get_mut(name).unwrap();
@@ -53,11 +48,9 @@ impl AbsorbField<Ipv6Addr> for CountAnalysis {
     }
 
     fn finalize(&mut self) -> DataFrame {
-        // Convert to sorted vectors, excluding zero counts
         let mut predicate_names = Vec::new();
         let mut counts = Vec::new();
         let mut percentages = Vec::new();
-        
         for (name, count) in &self.predicate_counts {
             if *count > 0 {
                 predicate_names.push(name.to_string());
@@ -70,25 +63,20 @@ impl AbsorbField<Ipv6Addr> for CountAnalysis {
                 percentages.push(percentage);
             }
         }
-        
-        // Sort by count (highest to lowest)
         let mut pairs: Vec<_> = predicate_names
             .into_iter()
             .zip(counts.into_iter())
             .zip(percentages.into_iter())
             .collect();
         pairs.sort_by(|a, b| (b.0).1.cmp(&(a.0).1));
-        
         let mut predicate_names = Vec::new();
         let mut counts = Vec::new();
         let mut percentages = Vec::new();
-        
         for ((name, count), percentage) in pairs {
             predicate_names.push(name);
             counts.push(count);
             percentages.push(percentage);
         }
-        
         DataFrame::new(vec![
             Column::new("predicate".into(), &predicate_names),
             Column::new("count".into(), &counts),
