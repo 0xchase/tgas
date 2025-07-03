@@ -120,23 +120,6 @@ rmap serve [OPTIONS]
   -m, --metrics-port    Prometheus metrics port [default: 9090]
 ```
 
-## Address Classification
-
-rmap includes comprehensive IPv6 address classification with predicates for:
-
-- **Loopback**: ::1/128
-- **Unspecified**: ::/128
-- **Link-local**: fe80::/10
-- **Unique Local**: fc00::/7
-- **Multicast**: ff00::/8
-- **Solicited-node**: ff02::1:ff00:0/104
-- **IPv4-mapped**: ::ffff:0:0/96
-- **IPv4-compatible**: ::/96
-- **Documentation**: 2001:db8::/32
-- **Benchmarking**: 2001:2::/48
-- **Teredo**: 2001:0::/32
-- **And many more...**
-
 ## Metrics and Monitoring
 
 The rmap grpc server reports various metrics over opentelemetry for monitoring and observability with grafana.
